@@ -1,0 +1,2726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stellary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        @import url('https://rsms.me/inter/inter.css');
+        html { font-family: 'Inter', sans-serif; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Full viewport height */
+            background-color: #f0f2f5; /* Main page background */
+        }
+        
+        /* Controls Header */
+        .controls-header {
+            padding: 8px 12px;
+            flex-shrink: 0;
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 4px; /* Reduced base gap for tighter packing on small screens */
+        }
+        @media (min-width: 640px) { /* sm breakpoint */
+            .tool-group {
+                gap: 6px; 
+            }
+        }
+
+        .tool-group-separator {
+            border-left: 1px solid #D1D5DB;
+            height: 24px;
+            margin: 0 6px; /* Reduced margin for separators */
+        }
+         @media (min-width: 640px) { /* sm breakpoint */
+            .tool-group-separator {
+                 margin: 0 10px;
+            }
+        }
+
+        .control-button, .tool-button {
+            padding: 0.4rem 0.6rem; /* Slightly reduced padding for smaller screens */
+            border-radius: 0.375rem; 
+            transition: all 0.15s ease-in-out;
+            border: 1px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem; /* Reduced gap inside buttons */
+            font-weight: 500;
+            color: #374151;
+            background-color: #F9FAFB;
+            border-color: #D1D5DB;
+        }
+         @media (min-width: 640px) { /* sm breakpoint */
+            .control-button, .tool-button {
+                padding: 0.5rem 0.75rem;
+                gap: 0.5rem;
+            }
+        }
+
+        .control-button:hover, .tool-button:hover {
+            background-color: #F3F4F6;
+            border-color: #9CA3AF;
+        }
+        .control-button.disabled, .tool-button.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #F9FAFB !important;
+            color: #6B7280 !important;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Active states for mode buttons */
+        .control-button.active-mode {
+             background-color: #FBBF24 !important; color: #1F2937 !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); border-color: #F59E0B;
+        }
+        .control-button.active-mode-endnode {
+             background-color: #3B82F6 !important; color: white !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); border-color: #2563EB;
+        }
+        .control-button.active-mode-radial {
+             background-color: #8B5CF6 !important; color: white !important; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); border-color: #7C3AED;
+        }
+        
+        /* Specific button colors for clarity */
+        #deleteItemBtn:not(.disabled):hover, #clearCanvasBtn:hover, #deleteConnectionBtn:hover { background-color: #FEE2E2; border-color: #FCA5A5; color: #B91C1C; }
+        #saveToDeviceBtn:hover { background-color: #E2E8F0; }
+        #loadFromDeviceBtn:hover { background-color: #E2E8F0; }
+        
+        /* Donation Button Style */
+        .donate-button {
+            background-color: #EC4899; /* pink-500 */
+            color: white;
+            border-color: #D946EF; /* fuchsia-500 */
+        }
+        .donate-button:hover {
+            background-color: #DB2777; /* pink-600 */
+            color: white;
+        }
+
+
+        /* Color Pickers */
+        #bgColorPicker, #arrowColorPicker {
+             width: 38px; height: 34px; /* Slightly smaller */
+             border: 1px solid #D1D5DB; cursor: pointer; border-radius: 0.25rem; padding: 2px;
+        }
+        #bgColorPickerLabel, #arrowColorPickerLabel {
+             font-size: 0.8rem; /* Slightly smaller label */
+             color: #4B5563; 
+             margin-right: 0.15rem; 
+             margin-left: 0.3rem;
+        }
+
+        /* Canvas area */
+        #canvas-wrapper {
+            flex-grow: 1;
+            min-height: 0;
+            overflow: hidden;
+            padding: 10px;
+            background-color: #e2e8f0;
+            display: flex;
+        }
+
+        canvas#constellationCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            touch-action: none;
+            background-color: #ffffff;
+            border-radius: 0.375rem; /* Match UI */
+            outline: none; /* Remove focus outline */
+        }
+        
+        /* Modal Styles */
+        .modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background-color: white; padding: 20px; border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 1002;
+            display: none; max-width: 90vw; width: 450px; max-height: 90vh; overflow-y: auto;
+        }
+        #helpModal { 
+            width: 550px; 
+            z-index: 1003;
+            display: none; /* Explicitly set to none */
+            flex-direction: column; /* Stack header, content, footer */
+            max-height: 85vh; /* Prevent modal from being too tall */
+        }
+        #helpContent {
+            overflow-y: auto; /* Make content scrollable */
+            padding-right: 10px; /* Space for scrollbar */
+        }
+        #confirmClearConstellationModal { z-index: 1004; }
+        #playbackModal { z-index: 1006; }
+        #playbackModal video, #playbackModal audio { width: 100%; border-radius: 4px; background-color: #f0f0f0; }
+
+        #connectionStylePickerModal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background-color: white; padding: 15px; border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1005; display: none;
+            flex-direction: column; align-items: center;
+        }
+        #connectionStylePickerModal h4 { margin-top: 0; margin-bottom: 10px; font-size: 1rem; font-weight: 600; }
+        #connectionStylePickerModal .style-buttons { display: flex; gap: 8px; }
+        #connectionStylePickerModal button {
+            padding: 6px 10px; border: 1px solid #D1D5DB; border-radius: 0.25rem;
+            background-color: #F9FAFB; cursor: pointer; font-weight: 500;
+        }
+        #connectionStylePickerModal button:hover { background-color: #F3F4F6; }
+        #connectionStylePickerModal button.active-style { background-color: #60A5FA; color: white; border-color: #3B82F6; }
+
+        #annotationModal textarea, #textNodeModal textarea {
+            width: calc(100% - 16px); border: 1px solid #ccc; padding: 8px; min-height: 80px;
+            margin-top: 5px; margin-bottom: 10px; border-radius: 4px;
+        }
+        #annotationModal label, #textNodeModal label { display: block; margin-top: 8px; font-size: 0.875rem; color: #374151; }
+        .modal button, .modal input[type="color"], .modal input[type="number"], .modal select {
+            margin-top: 5px; padding: 8px 12px; border-radius: 0.25rem; font-weight: 600; transition: background-color 0.15s ease-in-out;
+        }
+        .modal input[type="number"], .modal select { width: calc(100% - 16px); border: 1px solid #ccc; }
+        .modal input[type="color"] { width: calc(100% - 16px); height: 38px; }
+
+        #exportedImage { max-width: 100%; max-height: 60vh; border: 1px solid #ccc; margin-top: 10px; margin-bottom: 10px; }
+
+        /* Utility classes */
+        .loading-spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%;
+            width: 30px; height: 30px; animation: spin 1s linear infinite;
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            z-index: 1010; display: none;
+        }
+        @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+        #messageBox {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+            background-color: #333; color: white; padding: 10px 20px;
+            border-radius: 5px; z-index: 1009; opacity: 0;
+            transition: opacity 0.5s ease-in-out; display: none;
+        }
+        #messageBox.show { display: block; opacity: 1; }
+        .hidden-input { display: none; }
+
+        /* Scent Lexicon Modal Styles */
+       #scentLexiconResults .scent-card {
+           padding: 12px;
+           border: 1px solid #e5e7eb;
+           border-radius: 0.375rem;
+           background-color: #ffffff;
+           margin-bottom: 8px;
+           cursor: pointer;
+           transition: all 0.2s ease-in-out;
+           box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+       }
+       #scentLexiconResults .scent-card:hover {
+           border-color: #60a5fa;
+           background-color: #f0f9ff;
+           transform: translateY(-2px);
+           box-shadow: 0 4px 8px rgba(0,0,0,0.08);
+       }
+       #scentLexiconResults .scent-term {
+           font-weight: 600;
+           font-style: italic;
+           color: #1f2937;
+           font-size: 1rem;
+       }
+       #scentLexiconResults .scent-desc {
+           font-size: 0.875rem;
+           color: #4b5563;
+           margin-top: 4px;
+       }
+       #scentLexiconResults .scent-family {
+           display: inline-block;
+           margin-top: 8px;
+           padding: 2px 8px;
+           font-size: 0.75rem;
+           font-weight: 500;
+           border-radius: 9999px;
+           text-transform: uppercase;
+       }
+    </style>
+</head>
+<body>
+
+    <div class="controls-header">
+        <div class="flex flex-wrap justify-between items-center gap-y-2 mb-2">
+            <div class="tool-group flex-wrap"> <h1 class="text-xl font-bold text-gray-700">Stellary</h1>
+            </div>
+            <div class="tool-group flex-wrap">
+                <button id="saveToDeviceBtn" title="Save to Device (Ctrl+S)" class="tool-button"><i class="fas fa-download"></i> <span class="hidden md:inline">Save</span></button>
+                <input type="file" id="loadFromDeviceInput" accept=".json" class="hidden-input">
+                <button id="loadFromDeviceBtn" title="Load from Device (Ctrl+O)" class="tool-button"><i class="fas fa-upload"></i> <span class="hidden md:inline">Load</span></button>
+                <div class="tool-group-separator hidden sm:block"></div>
+                <button id="exportPngBtn" title="Export as PNG" class="tool-button"><i class="fas fa-file-export"></i></button>
+                <button id="clearCanvasBtn" title="Clear Canvas" class="tool-button"><i class="fas fa-broom"></i></button>
+                <div class="tool-group-separator hidden sm:block"></div>
+                <button id="undoBtn" title="Undo (Ctrl+Z)" class="tool-button disabled"><i class="fas fa-undo"></i></button>
+                <button id="redoBtn" title="Redo (Ctrl+Y)" class="tool-button disabled"><i class="fas fa-redo"></i></button>
+                <div class="tool-group-separator hidden md:block"></div>
+                <a href="https://ko-fi.com/thorstenbecker" target="_blank" rel="noopener noreferrer" id="donateBtn" title="Support the Developer" class="tool-button donate-button"><i class="fas fa-dollar-sign"></i></a>
+                <button id="helpBtn" title="Quick Help" class="tool-button"><i class="fas fa-question-circle"></i></button>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap justify-center md:justify-between items-center gap-y-2 gap-x-1 sm:gap-x-2 md:gap-x-3 bg-gray-100 p-1 sm:p-2 rounded-lg">
+             <div class="tool-group flex-wrap"> <span class="hidden sm:inline-block text-xs sm:text-sm font-semibold text-gray-500 mr-1">Create:</span>
+                <input type="file" id="uploadInput" accept="image/*,audio/*,video/mp4,video/webm,video/quicktime" multiple class="hidden-input">
+                <button id="addImageBtn" title="Add Image (I)" class="control-button"><i class="fas fa-image"></i></button>
+                <button id="addAudioBtn" title="Add Audio" class="control-button"><i class="fas fa-music"></i></button>
+                <button id="addVideoBtn" title="Add Video" class="control-button"><i class="fas fa-film"></i></button>
+                <button id="addTextNodeBtn" title="Add Text Snippet (T)" class="control-button"><i class="fas fa-font"></i></button>
+                <button id="addScentCardBtn" title="Add Scent Evocation" class="control-button"><i class="fas fa-spray-can"></i></button> 
+                <div class="tool-group-separator hidden sm:block"></div>
+                 <button id="connectImagesBtn" title="Connect Items (C)" class="control-button"><i class="fas fa-link"></i></button>
+                <button id="deleteConnectionBtn" title="Delete Connection" class="control-button"><i class="fas fa-unlink"></i></button>
+            </div>
+
+            <div class="tool-group flex-wrap" id="selected-item-actions"> <button id="styleOrAnnotateBtn" title="Annotate / Style Item (A)" class="control-button disabled"><i class="fas fa-comment-dots"></i></button>
+                 <button id="deleteItemBtn" title="Delete Selected Item (Del/Backspace)" class="control-button disabled"><i class="fas fa-trash-alt"></i></button>
+                 <div class="tool-group-separator hidden sm:block"></div>
+                 <button id="bringToFrontBtn" title="Bring to Front" class="control-button disabled"><i class="fas fa-arrow-up"></i></button>
+                 <button id="sendToBackBtn" title="Send to Back" class="control-button disabled"><i class="fas fa-arrow-down"></i></button>
+                 <div class="tool-group-separator hidden sm:block"></div>
+                 <button id="coreStarBtn" title="Mark as Core Star" class="control-button disabled"><i class="fas fa-star"></i></button>
+                 <button id="toggleRadialGuideBtn" title="Toggle Radial Guide for Core Star" class="control-button disabled"><i class="fas fa-bullseye"></i></button>
+                 <button id="toggleEndNodeBtn" title="Mark as End Node" class="control-button disabled"><i class="fas fa-flag-checkered"></i></button>
+            </div>
+
+            <div class="tool-group flex-wrap"> <label id="bgColorPickerLabel" for="bgColorPicker" class="hidden sm:inline-block text-xs sm:text-sm mr-1">BG:</label>
+                 <input type="color" id="bgColorPicker" title="Canvas Background Color" value="#ffffff">
+                 <label id="arrowColorPickerLabel" for="arrowColorPicker" class="hidden sm:inline-block text-xs sm:text-sm ml-1 sm:ml-2 mr-1">Arrows:</label>
+                 <input type="color" id="arrowColorPicker" title="Arrow Color" value="#4A5568">
+                 <div class="tool-group-separator hidden sm:block"></div>
+                 <button id="zoomOutBtn" title="Zoom Out (-)" class="control-button"><i class="fas fa-search-minus"></i></button>
+                 <button id="resetZoomPanBtn" title="Reset View (0)" class="control-button"><i class="fas fa-expand-arrows-alt"></i></button>
+                 <button id="zoomInBtn" title="Zoom In (+)" class="control-button"><i class="fas fa-search-plus"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-wrapper">
+        <canvas id="constellationCanvas" tabindex="0"></canvas>
+    </div>
+    
+    <div id="playbackModal" class="modal">
+        <h3 id="playbackModalTitle" class="text-lg font-semibold mb-3">Media Playback</h3>
+        <div id="playbackContainer"></div>
+        <button id="closePlaybackModalBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 w-full mt-2 py-2 rounded">Close</button>
+    </div>
+
+    <div id="annotationModal" class="modal">
+        <h3 id="annotationModalTitle" class="text-lg font-semibold mb-2">Annotate / Style Item</h3>
+        <label for="annotationText">Annotation:</label>
+        <textarea id="annotationText" placeholder="Your annotation here..."></textarea>
+        <label for="annotationColorInput">Text Color:</label>
+        <input type="color" id="annotationColorInput" value="#000000">
+        <label for="annotationFontSizeInput">Font Size:</label>
+        <input type="number" id="annotationFontSizeInput" value="12" min="8" max="48">
+        <label for="annotationFontFamilyInput">Font:</label>
+        <select id="annotationFontFamilyInput">
+            <option value="'Inter', sans-serif">Inter</option>
+            <option value="'Arial', sans-serif">Arial</option>
+            <option value="'Verdana', sans-serif">Verdana</option>
+            <option value="'Georgia', serif">Georgia</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            <option value="'Comic Sans MS', cursive">Comic Sans MS</option>
+        </select>
+        <div id="imageSpecificControls">
+            <label for="annotationPositionInput">Text Position (for Image):</label>
+            <select id="annotationPositionInput">
+                <option value="bottom">Bottom</option>
+                <option value="top">Top</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+            </select>
+            <hr class="my-3">
+            <h4 class="text-md font-semibold mb-1">Image Border</h4>
+            <label for="imageBorderColorInput">Border Color:</label>
+            <input type="color" id="imageBorderColorInput" value="#000000">
+            <label for="imageBorderWidthInput">Border Width (px):</label>
+            <input type="number" id="imageBorderWidthInput" value="0" min="0" max="20">
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+            <button id="submitAnnotationBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Apply Changes</button>
+            <button id="cancelAnnotationBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded">Cancel</button>
+        </div>
+    </div>
+
+    <div id="textNodeModal" class="modal">
+        <h3 id="textNodeModalTitle" class="text-lg font-semibold mb-2">Add Text Snippet</h3>
+        <label for="textNodeContent">Text:</label>
+        <textarea id="textNodeContent" placeholder="Your text snippet..."></textarea>
+        <label for="textNodeColorInput">Text Color:</label>
+        <input type="color" id="textNodeColorInput" value="#000000">
+        <label for="textNodeFontSizeInput">Font Size (px):</label>
+        <input type="number" id="textNodeFontSizeInput" value="16" min="8" max="72">
+        <label for="textNodeFontFamilyInput">Font:</label>
+        <select id="textNodeFontFamilyInput">
+            <option value="'Inter', sans-serif">Inter</option>
+            <option value="'Arial', sans-serif">Arial</option>
+            <option value="'Verdana', sans-serif">Verdana</option>
+            <option value="'Georgia', serif">Georgia</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            <option value="'Comic Sans MS', cursive">Comic Sans MS</option>
+        </select>
+        <label for="textNodeBgColorInput">Background Color:</label>
+        <input type="color" id="textNodeBgColorInput" value="#FFFFFF">
+        <label for="textNodeDefaultWidthInput">Width (px):</label>
+        <input type="number" id="textNodeDefaultWidthInput" value="200" min="50" max="1000">
+        <div class="mt-4 flex justify-end gap-2">
+            <button id="submitTextNodeBtn" class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded">Add Snippet</button>
+            <button id="cancelTextNodeBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded">Cancel</button>
+        </div>
+    </div>
+
+    <div id="connectionStylePickerModal">
+        <h4>Choose Connection Style</h4>
+        <div class="style-buttons">
+            <button data-style="solid" id="styleSolidBtn">Solid</button>
+            <button data-style="dashed" id="styleDashedBtn">Dashed</button>
+            <button data-style="dotted" id="styleDottedBtn">Dotted</button>
+        </div>
+        <button id="cancelConnectStyleBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800" style="margin-top: 10px; width: calc(100% - 16px);">Cancel</button>
+    </div>
+
+    <div id="exportPngModal" class="modal">
+        <h3 class="text-lg font-semibold">Exported Image</h3>
+        <p class="text-sm text-gray-600 my-2">Right-click (or long-press on mobile) the image below and select "Save Image As..." to download.</p>
+        <img id="exportedImage" src="#" alt="Exported Constellation">
+        <button id="closeExportModalBtn" class="bg-red-500 hover:bg-red-600 text-white w-full mt-2 py-2 rounded">Close</button>
+    </div>
+
+    <div id="helpModal" class="modal">
+        <h3 class="text-xl font-semibold mb-3">Stellary: Quick Help</h3>
+        <div id="helpContent" class="text-sm leading-relaxed"></div>
+        <div class="mt-4 flex justify-end">
+            <button id="closeHelpModalBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">OK</button>
+        </div>
+    </div>
+
+    <div id="confirmClearConstellationModal" class="modal">
+        <h3 class="text-lg font-semibold mb-2">Confirm Clear Canvas</h3>
+        <p class="text-sm text-gray-600 my-3">Are you sure you want to clear the entire canvas? This action can be undone using the Undo button (Ctrl+Z) if changes were made after loading or initialising.</p>
+        <div class="mt-4 flex justify-end gap-2">
+            <button id="confirmClearConstellationCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded">Cancel</button>
+            <button id="confirmClearConstellationOkBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Clear Canvas</button>
+        </div>
+    </div>
+
+    <div id="scentLexiconModal" class="modal" style="width: 600px; max-height: 80vh;">
+        <h3 class="text-xl font-semibold mb-3">Poetic Scent Lexicon</h3>
+        <div class="flex gap-4 mb-3">
+            <div class="flex-1">
+                <label for="scentSearchInput" class="text-sm font-medium text-gray-700">Search</label>
+                <input type="text" id="scentSearchInput" placeholder="e.g., 'cedar', 'rain', 'rose'" class="w-full p-2 border border-gray-300 rounded-md">
+            </div>
+            <div class="flex-1">
+                <label for="scentFilterSelect" class="text-sm font-medium text-gray-700">Filter by Category</label>
+                <select id="scentFilterSelect" class="w-full p-2 border border-gray-300 rounded-md bg-white">
+                    </select>
+            </div>
+        </div>
+        <div id="scentLexiconResults" class="h-80 overflow-y-auto border rounded-md p-2 bg-gray-50">
+            </div>
+        <div class="mt-4 flex justify-end">
+            <button id="closeScentModalBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded">Cancel</button>
+        </div>
+    </div>
+
+    <div id="loadingSpinner" class="loading-spinner"></div>
+    <div id="messageBox"></div>
+
+    <script>
+        // --- Constants ---
+        const MIN_SCALE = 0.1;
+        const MAX_SCALE = 5;
+        const ZOOM_SENSITIVITY = 0.001; // Used in original, but direct zoom factor is now used. Kept for reference.
+        const RESIZE_HANDLE_SIZE = 10; // World units for hit detection
+        const MIN_ITEM_SIZE = RESIZE_HANDLE_SIZE * 1.5; // Minimum size for resizable items
+        const CONNECTION_HIT_THRESHOLD = 8; // For clicking on connection lines
+        const EPSILON = 1e-5; // For floating point comparisons
+        const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+        const MAX_HISTORY_STATES = 50;
+        const DOUBLE_TAP_THRESHOLD = 400; // ms
+        const DEFAULT_AUDIO_VIDEO_WIDTH = 120;
+        const DEFAULT_AUDIO_VIDEO_HEIGHT = 80;
+        const DEFAULT_TEXT_NODE_WIDTH = 200;
+        const DEFAULT_SCENT_CARD_WIDTH = 220;
+        const DEFAULT_SCENT_CARD_HEIGHT = 120;
+        const DEFAULT_IMAGE_WIDTH = 150;
+        const NUDGE_AMOUNT = 10; // World pixels to move item with arrow keys
+        const MODAL_DISPLAY_FLEX = 'flex'; // Use flex for the help modal now
+        const MODAL_DISPLAY_BLOCK = 'block'; // For checking if modals are open
+
+        // --- Canvas Setup ---
+        const canvas = document.getElementById('constellationCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Scent Lexicon Data ---
+        const SCENT_LEXICON = {
+           "Floral": [
+               { term: "A breath of Araby", desc: "A heady rush of jasmine and rose, heavy with longing and exile." },
+               { term: "The ghost of a rose", desc: "A faded bloom’s last whisper, a memory pressed in parchment." },
+               { term: "Perfume of heliotropes, so sweet it sickens", desc: "A narcotic sweetness, both intoxicating and oppressive." },
+               { term: "A meadow breathing in the dark", desc: "The scent of wildflowers stirring under a twilight hush." },
+               { term: "The violet’s shy breath", desc: "Soft and sorrowful, a fleeting touch upon the wind." },
+               { term: "A hidden honey", desc: "The secret nectar of unseen blossoms, elusive yet felt." },
+               { term: "Lilac-scented dust", desc: "The melancholy trace of spring’s end, beauty lingering in decay." },
+               { term: "A garden of sealed lips", desc: "Roses in bloom yet silent, their perfume thick with mystery." },
+               { term: "Lavender ghosts in the dusk", desc: "A lingering presence of past summers, soft as fading laughter." },
+               { term: "A white flower’s cool breath", desc: "A hush of night-blooming petals, cool against warm skin." }
+           ],
+           "Woody": [
+               { term: "The dark breath of cedar", desc: "A shelter of pine and solitude, whispering of time’s passing." },
+               { term: "Mossy with old shadows", desc: "The scent of damp bark, where light has long been forgotten." },
+               { term: "Sandalwood smoke curling like prayers", desc: "A sacred hush in the air, lingering in temple corners." },
+               { term: "Amber caught in the tide’s turning", desc: "Golden resin, washed ashore with the weight of memory." },
+               { term: "Oak and leather, steeped in years", desc: "The deep scent of an old library, time trapped in binding and wood." },
+               { term: "The breath of fallen leaves", desc: "Autumn’s last exhalation, crisp and rustling underfoot." },
+               { term: "A pine-laden wind, sharp and green", desc: "The wild scent of adventure, cutting through the northern air." },
+               { term: "A warm hollow of sandalwood", desc: "Dust and heat mingled with the pulse of ancient trees." },
+               { term: "The musk of rain-dark wood", desc: "A forest floor after the storm, the earth rich with longing." },
+               { term: "A sigh of smoldering resin", desc: "Sap turning to flame, fragrant and slow as the setting sun." }
+           ],
+           "Fresh": [
+               { term: "A blade of grass wet with morning", desc: "A single breath of dew, weightless yet full of promise." },
+               { term: "Lemon-light upon the air", desc: "Bright and biting, sharp as sunlight on a harbor’s edge." },
+               { term: "A breath of mint upon the breeze", desc: "Cool and fleeting, a whisper against fevered skin." },
+               { term: "The sky’s blue scent, wind-washed", desc: "As crisp as a cloudless morning, an exhale from the heavens." },
+               { term: "Meadow-green and brimming with youth", desc: "The scent of crushed grass, wild and unbound." },
+               { term: "The salt-throated sea", desc: "A tang of brine and wind, biting as a gull’s cry." },
+               { term: "A rain-washed world, clean as an untroubled heart", desc: "The sharp clarity of air after a storm, hushed and new." },
+               { term: "A handful of thyme, summer-still", desc: "The warm green of herbs, kissed by sun and memory." },
+               { term: "The cool, sharp breath of dawn", desc: "The promise of a day yet unspoiled, crisp with awakening." },
+               { term: "A misted orchard, silver with scent", desc: "A wisp of apples ripening, clinging to the morning fog." }
+           ],
+           "Warm / Spiced": [
+               { term: "Cinnamon dusk", desc: "A twilight rich with spice, warm as a forgotten dream." },
+               { term: "Vanilla like slow honey", desc: "Thick and golden, curling at the edges of memory." },
+               { term: "A whisper of clove on winter lips", desc: "Spiced and sharp, fire in the hush of cold." },
+               { term: "The slow burn of myrrh", desc: "Ancient and reverent, lingering in sacred hush." },
+               { term: "A moon-drunk night, heavy with musk", desc: "Dark and golden, a perfume of longing and silk." },
+               { term: "Nutmeg and old parchment", desc: "A scholar’s scent, ink-stained and dust-sweet." },
+               { term: "A trace of incense, ghosting the air", desc: "A delicate memory, rising and vanishing into the unseen." },
+               { term: "An amber hush, molten in firelight", desc: "Rich and smoldering, a decadent warmth." },
+               { term: "Honeyed opium dreams", desc: "Dark sweetness laced with reverie, thick as velvet shadows." },
+               { term: "The breath of saffron-laden hands", desc: "Golden and spiced, fragrant with hidden desires." }
+           ],
+            "Atmospheric & Elemental": [
+               { term: "Petrichor", desc: "The scent of earth after rain, a breath of renewal rising from soil and stone." },
+               { term: "Hearthwood", desc: "The comforting aroma of crackling firewood, resinous and warm." },
+               { term: "Zephyr’s Kiss", desc: "A fleeting breeze carrying hints of sea spray, wildflowers, and distant lands." },
+               { term: "Moonlit Mist", desc: "The cool, elusive scent of damp air drifting through midnight gardens." },
+               { term: "Sun-Warmed Pine", desc: "A golden resinous scent, mingling sap, needles, and dry bark." },
+               { term: "Frostbite", desc: "A crisp, biting scent of frozen air, edged with mineral sharpness." },
+               { term: "Thunder’s Edge", desc: "A metallic, ion-charged scent that heralds the storm." }
+           ]
+        };
+
+        // --- DOM Elements (Cached) ---
+        const uploadInput = document.getElementById('uploadInput');
+        const loadFromDeviceInput = document.getElementById('loadFromDeviceInput');
+        const addImageBtn = document.getElementById('addImageBtn');
+        const addAudioBtn = document.getElementById('addAudioBtn');
+        const addVideoBtn = document.getElementById('addVideoBtn');
+        const styleOrAnnotateBtn = document.getElementById('styleOrAnnotateBtn');
+        const connectImagesBtn = document.getElementById('connectImagesBtn'); 
+        const deleteConnectionBtn = document.getElementById('deleteConnectionBtn'); 
+        const zoomInBtn = document.getElementById('zoomInBtn'); 
+        const zoomOutBtn = document.getElementById('zoomOutBtn'); 
+        const resetZoomPanBtn = document.getElementById('resetZoomPanBtn');
+        const bgColorPicker = document.getElementById('bgColorPicker'); 
+        const arrowColorPicker = document.getElementById('arrowColorPicker'); 
+        const bringToFrontBtn = document.getElementById('bringToFrontBtn'); 
+        const sendToBackBtn = document.getElementById('sendToBackBtn'); 
+        const coreStarBtn = document.getElementById('coreStarBtn'); 
+        const toggleEndNodeBtn = document.getElementById('toggleEndNodeBtn'); 
+        const deleteItemBtn = document.getElementById('deleteItemBtn'); 
+        const undoBtn = document.getElementById('undoBtn'); 
+        const redoBtn = document.getElementById('redoBtn'); 
+        const saveToDeviceBtn = document.getElementById('saveToDeviceBtn');
+        const loadFromDeviceBtn = document.getElementById('loadFromDeviceBtn');
+        const exportPngBtn = document.getElementById('exportPngBtn'); 
+        const clearCanvasBtn = document.getElementById('clearCanvasBtn'); 
+        const annotationModal = document.getElementById('annotationModal'); 
+        const annotationModalTitle = document.getElementById('annotationModalTitle'); 
+        const annotationText = document.getElementById('annotationText'); 
+        const annotationColorInput = document.getElementById('annotationColorInput'); 
+        const annotationFontSizeInput = document.getElementById('annotationFontSizeInput'); 
+        const annotationFontFamilyInput = document.getElementById('annotationFontFamilyInput'); 
+        const imageSpecificControls = document.getElementById('imageSpecificControls');
+        const annotationPositionInput = document.getElementById('annotationPositionInput'); 
+        const imageBorderColorInput = document.getElementById('imageBorderColorInput'); 
+        const imageBorderWidthInput = document.getElementById('imageBorderWidthInput'); 
+        const submitAnnotationBtn = document.getElementById('submitAnnotationBtn'); 
+        const cancelAnnotationBtn = document.getElementById('cancelAnnotationBtn'); 
+        const exportPngModal = document.getElementById('exportPngModal');
+        const exportedImage = document.getElementById('exportedImage');
+        const closeExportModalBtn = document.getElementById('closeExportModalBtn');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const messageBox = document.getElementById('messageBox');
+        const helpBtn = document.getElementById('helpBtn'); 
+        const helpModal = document.getElementById('helpModal'); 
+        const helpContent = document.getElementById('helpContent'); 
+        const closeHelpModalBtn = document.getElementById('closeHelpModalBtn'); 
+        const confirmClearConstellationModal = document.getElementById('confirmClearConstellationModal');
+        const confirmClearConstellationOkBtn = document.getElementById('confirmClearConstellationOkBtn');
+        const confirmClearConstellationCancelBtn = document.getElementById('confirmClearConstellationCancelBtn');
+        const playbackModal = document.getElementById('playbackModal');
+        const playbackContainer = document.getElementById('playbackContainer');
+        const closePlaybackModalBtn = document.getElementById('closePlaybackModalBtn');
+        const addTextNodeBtn = document.getElementById('addTextNodeBtn');
+        const textNodeModal = document.getElementById('textNodeModal');
+        const textNodeModalTitle = document.getElementById('textNodeModalTitle');
+        const textNodeContent = document.getElementById('textNodeContent');
+        const textNodeColorInput = document.getElementById('textNodeColorInput');
+        const textNodeFontSizeInput = document.getElementById('textNodeFontSizeInput');
+        const textNodeFontFamilyInput = document.getElementById('textNodeFontFamilyInput'); 
+        const textNodeBgColorInput = document.getElementById('textNodeBgColorInput');
+        const textNodeDefaultWidthInput = document.getElementById('textNodeDefaultWidthInput');
+        const submitTextNodeBtn = document.getElementById('submitTextNodeBtn');
+        const cancelTextNodeBtn = document.getElementById('cancelTextNodeBtn');
+        const connectionStylePickerModal = document.getElementById('connectionStylePickerModal');
+        const styleSolidBtn = document.getElementById('styleSolidBtn');
+        const styleDashedBtn = document.getElementById('styleDashedBtn');
+        const styleDottedBtn = document.getElementById('styleDottedBtn');
+        const cancelConnectStyleBtn = document.getElementById('cancelConnectStyleBtn');
+        const toggleRadialGuideBtn = document.getElementById('toggleRadialGuideBtn');
+        const addScentCardBtn = document.getElementById('addScentCardBtn');
+        const scentLexiconModal = document.getElementById('scentLexiconModal');
+        const closeScentModalBtn = document.getElementById('closeScentModalBtn');
+        const scentSearchInput = document.getElementById('scentSearchInput');
+        const scentFilterSelect = document.getElementById('scentFilterSelect');
+        const scentLexiconResults = document.getElementById('scentLexiconResults');
+
+        // Preload Icon Images
+        const audioIconImg = new Image();
+        audioIconImg.crossOrigin = "anonymous";
+        const videoIconImg = new Image();
+        videoIconImg.crossOrigin = "anonymous";
+        let audioIconLoaded = false;
+        let videoIconLoaded = false;
+
+        // --- State Variables ---
+        let items = []; 
+        let connections = []; 
+        let selectedItem = null;
+        let isDragging = false;
+        let isPanning = false;
+        let isResizing = false; 
+        let resizeCorner = null; 
+        let dragStartCoords = { x: 0, y: 0 };
+        let itemInitialDimensions = { width: 0, height: 0, x: 0, y: 0 };
+        let lastPanCoords = { x: 0, y: 0 };
+        let scale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        let history = [];
+        let redoStack = [];
+        let touchStartCoords = { x: 0, y: 0 };
+        let initialPinchDistance = null;
+        let canvasBackgroundColor = '#ffffff'; 
+        let connectionLineColor = '#4A5568'; 
+        let radialGuideLineColor = 'rgba(100, 100, 100, 0.35)';
+        let isConnectingMode = false; 
+        let connectionStartItem = null; 
+        let isDeletingConnectionMode = false; 
+        let lastTapTime = 0;
+        let lastTapItemId = null;
+        let showRadialGuide = false;
+        let radialGuideCoreItemId = null; 
+        let editingTextNode = null; 
+        let pendingConnectionDetails = null;
+        
+        // --- Initialization ---
+        function init() {
+            audioIconImg.src = 'https://i.ibb.co/jPFst9hf/audio.png'; 
+            audioIconImg.onload = () => { audioIconLoaded = true; draw(); };
+            audioIconImg.onerror = () => { 
+                console.error("Failed to load audio icon. Using placeholder."); 
+                audioIconLoaded = false; 
+                draw(); 
+            };
+            videoIconImg.src = 'https://i.ibb.co/2YYFWkLF/video.png'; 
+            videoIconImg.onload = () => { videoIconLoaded = true; draw(); };
+            videoIconImg.onerror = () => { 
+                console.error("Failed to load video icon. Using placeholder."); 
+                videoIconLoaded = false; 
+                draw();
+            };
+            addImageBtn.addEventListener('click', () => triggerUpload('image/*'));
+            addAudioBtn.addEventListener('click', () => triggerUpload('audio/*'));
+            addVideoBtn.addEventListener('click', () => triggerUpload('video/mp4,video/webm,video/quicktime,.mov'));
+            uploadInput.addEventListener('change', handleFileUpload);
+            loadFromDeviceBtn.addEventListener('click', () => loadFromDeviceInput.click());
+            loadFromDeviceInput.addEventListener('change', loadBoardFromJson); 
+            saveToDeviceBtn.addEventListener('click', saveBoardAsJson); 
+            styleOrAnnotateBtn.addEventListener('click', openAnnotationModal);
+            connectImagesBtn.addEventListener('click', toggleConnectMode); 
+            deleteConnectionBtn.addEventListener('click', toggleDeleteConnectionMode); 
+            coreStarBtn.addEventListener('click', toggleCoreStar); 
+            toggleEndNodeBtn.addEventListener('click', toggleEndNode); 
+            deleteItemBtn.addEventListener('click', deleteSelectedItem); 
+            bgColorPicker.addEventListener('input', handleBgColorChange); 
+            arrowColorPicker.addEventListener('input', handleArrowColorChange); 
+            undoBtn.addEventListener('click', undo);
+            redoBtn.addEventListener('click', redo);
+            zoomInBtn.addEventListener('click', () => { zoomCanvas(1.2); saveState(); });
+            zoomOutBtn.addEventListener('click', () => { zoomCanvas(0.8); saveState(); });
+            resetZoomPanBtn.addEventListener('click', resetView); 
+            bringToFrontBtn.addEventListener('click', () => changeZIndex(true));
+            sendToBackBtn.addEventListener('click', () => changeZIndex(false));
+            exportPngBtn.addEventListener('click', exportBoardAsPng);
+            clearCanvasBtn.addEventListener('click', () => {
+                confirmClearConstellationModal.style.display = MODAL_DISPLAY_BLOCK;
+            });
+            submitAnnotationBtn.addEventListener('click', handleSubmitAnnotation); 
+            cancelAnnotationBtn.addEventListener('click', closeAnnotationModal); 
+            closePlaybackModalBtn.addEventListener('click', closePlaybackModal);
+            closeExportModalBtn.addEventListener('click', () => {
+                exportPngModal.style.display = 'none';
+                exportedImage.src = '#'; 
+            });
+            helpBtn.addEventListener('click', openHelpModal); 
+            closeHelpModalBtn.addEventListener('click', closeHelpModal); 
+            confirmClearConstellationOkBtn.addEventListener('click', executeClearCanvas);
+            confirmClearConstellationCancelBtn.addEventListener('click', () => {
+                confirmClearConstellationModal.style.display = 'none';
+            });
+            addTextNodeBtn.addEventListener('click', openTextNodeModalForAdd);
+            submitTextNodeBtn.addEventListener('click', handleSubmitTextNode);
+            cancelTextNodeBtn.addEventListener('click', closeTextNodeModal);
+            styleSolidBtn.addEventListener('click', () => handleConnectionStyleChoice('solid'));
+            styleDashedBtn.addEventListener('click', () => handleConnectionStyleChoice('dashed'));
+            styleDottedBtn.addEventListener('click', () => handleConnectionStyleChoice('dotted'));
+            cancelConnectStyleBtn.addEventListener('click', cancelConnectionStyleChoice);
+            toggleRadialGuideBtn.addEventListener('click', toggleRadialGuide);
+            addScentCardBtn.addEventListener('click', openScentModal);
+            closeScentModalBtn.addEventListener('click', () => scentLexiconModal.style.display = 'none');
+            scentSearchInput.addEventListener('input', populateScentLexicon);
+            scentFilterSelect.addEventListener('change', populateScentLexicon);
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseLeave);
+            canvas.addEventListener('wheel', handleWheelZoom, { passive: false });
+            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+            canvas.addEventListener('touchend', handleTouchEnd);
+            canvas.addEventListener('touchcancel', handleTouchEnd);
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('resize', resizeCanvas); 
+            window.addEventListener('beforeunload', handleBeforeUnload); 
+            history = [];
+            redoStack = [];
+            bgColorPicker.value = canvasBackgroundColor;
+            canvas.style.backgroundColor = canvasBackgroundColor;
+            arrowColorPicker.value = connectionLineColor;
+            updateRadialGuideColor();
+            saveState(); 
+            resizeCanvas(); 
+            canvas.focus(); // Set focus to the canvas on initialization
+        }
+
+        // --- Canvas & View ---
+        function resizeCanvas() {
+            if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
+                 canvas.width = canvas.clientWidth;
+                 canvas.height = canvas.clientHeight;
+            }
+            draw();
+        }
+
+        function zoomCanvas(factor, clientX, clientY, isPinch = false) {
+            const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
+            if (Math.abs(newScale - scale) < EPSILON && !isPinch) return;
+            const SFPx = clientX === undefined ? canvas.width / 2 : clientX - canvas.offsetLeft;
+            const SFPy = clientY === undefined ? canvas.height / 2 : clientY - canvas.offsetTop;
+            const WFPx_before = (SFPx - translateX) / scale;
+            const WFPy_before = (SFPy - translateY) / scale;
+            scale = newScale;
+            translateX = SFPx - WFPx_before * scale;
+            translateY = SFPy - WFPy_before * scale;
+            draw();
+        }
+
+        function resetView() {
+            scale = 1;
+            translateX = 0;
+            translateY = 0;
+            saveState();
+            draw();
+        }
+        
+        function getCanvasCoordinates(event, isTouchEvent = false) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = isTouchEvent ? event.clientX : event.clientX;
+            const clientY = isTouchEvent ? event.clientY : event.clientY;
+            return {
+                worldX: (clientX - rect.left - translateX) / scale,
+                worldY: (clientY - rect.top - translateY) / scale,
+                clientX: clientX,
+                clientY: clientY
+            };
+        }
+
+        // --- Drawing ---
+        function draw() {
+            ctx.save();
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+            ctx.translate(translateX, translateY);
+            ctx.scale(scale, scale);
+            if (showRadialGuide && radialGuideCoreItemId) {
+                drawRadialGuide();
+            }
+            items.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+            items.forEach(item => {
+                drawItem(item);
+                if (item.annotation && item.annotation.text) {
+                    drawAnnotation(item);
+                }
+            });
+            drawConnections();
+            if (selectedItem) {
+                drawSelectionHighlight(selectedItem);
+            }
+            ctx.restore();
+        }
+
+        function drawItem(item) {
+            if (item.type === 'image' && item.img && item.img.complete) {
+                const originalShadowColor = ctx.shadowColor; 
+                const originalShadowBlur = ctx.shadowBlur;
+                if (item.isCoreStar) { ctx.shadowColor = 'rgba(255, 215, 0, 0.6)'; ctx.shadowBlur = 15; } 
+                else if (item.isEndNode) { ctx.shadowColor = 'rgba(66, 153, 225, 0.7)'; ctx.shadowBlur = 15;} 
+                ctx.drawImage(item.img, item.x, item.y, item.width, item.height);
+                if (item.isCoreStar || item.isEndNode) { ctx.shadowColor = originalShadowColor; ctx.shadowBlur = originalShadowBlur; }
+                if (item.borderWidth && item.borderWidth > 0) { 
+                    ctx.strokeStyle = item.borderColor || '#000000'; 
+                    ctx.lineWidth = item.borderWidth; 
+                    ctx.strokeRect(item.x, item.y, item.width, item.height); 
+                }
+                if (item.isCoreStar) {
+                    ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)'; 
+                    ctx.lineWidth = 3 + (item.borderWidth > 0 ? 1: 0); 
+                    ctx.strokeRect(item.x - 1, item.y - 1, item.width + 2, item.height + 2); 
+                } else if (item.isEndNode) {
+                    ctx.strokeStyle = 'rgba(30, 144, 255, 0.9)'; 
+                    ctx.lineWidth = 3 + (item.borderWidth > 0 ? 1: 0); 
+                    ctx.strokeRect(item.x - 1, item.y - 1, item.width + 2, item.height + 2); 
+                }
+            } else if (item.type === 'audio' || item.type === 'video') {
+                drawMediaPlaceholder(item);
+            } else if (item.type === 'textNode') { 
+                drawTextNode(item);
+            } else if (item.type === 'scentCard') { 
+                drawScentCard(item);
+            }
+        }
+
+        function drawMediaPlaceholder(item) {
+            ctx.fillStyle = '#E9EDF0'; 
+            ctx.strokeStyle = '#B0BFCB'; 
+            ctx.lineWidth = 1; 
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(item.x, item.y, item.width, item.height, [8]); 
+            } else {
+                ctx.rect(item.x, item.y, item.width, item.height);
+            }
+            ctx.fill();
+            ctx.stroke();
+            const iconPadding = Math.min(item.width, item.height) * 0.2; 
+            const iconContentWidth = item.width - 2 * iconPadding;
+            const iconContentHeight = item.height - 2 * iconPadding;
+            let targetIcon, iconLoadedFlag;
+            if (item.type === 'audio') {
+                targetIcon = audioIconImg;
+                iconLoadedFlag = audioIconLoaded;
+            } else {
+                targetIcon = videoIconImg;
+                iconLoadedFlag = videoIconLoaded;
+            }
+            if (iconLoadedFlag && targetIcon.complete && targetIcon.naturalWidth > 0) {
+                const iconAspect = targetIcon.naturalWidth / targetIcon.naturalHeight;
+                let drawWidth = iconContentWidth;
+                let drawHeight = iconContentWidth / iconAspect;
+                if (drawHeight > iconContentHeight) {
+                    drawHeight = iconContentHeight;
+                    drawWidth = iconContentHeight * iconAspect;
+                }
+                if (drawWidth > iconContentWidth) { 
+                    drawWidth = iconContentWidth;
+                    drawHeight = iconContentWidth / iconAspect;
+                }
+                const drawX = item.x + (item.width - drawWidth) / 2;
+                const drawY = item.y + (item.height - drawHeight) / 2;
+                ctx.drawImage(targetIcon, drawX, drawY, drawWidth, drawHeight);
+            } else { 
+                ctx.fillStyle = '#334155';
+                const iconTextFontSize = Math.min(item.width, item.height) * 0.2;
+                ctx.font = `${iconTextFontSize}px Inter, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(item.type.charAt(0).toUpperCase() + item.type.slice(1), item.x + item.width / 2, item.y + item.height / 2);
+            }
+        }
+
+        function drawTextNode(item) {
+            ctx.font = `${item.fontSize}px ${item.fontFamily || "'Inter', sans-serif"}`; 
+            const lines = wrapText(ctx, item.text, 0, 0, item.width - 10, item.fontSize, false); 
+            item.height = (lines.length * item.fontSize * 1.2) + 10;
+            ctx.fillStyle = item.backgroundColor || 'rgba(255,255,255,0.7)';
+            ctx.fillRect(item.x, item.y, item.width, item.height);
+            ctx.strokeStyle = '#cccccc';
+            ctx.lineWidth = 1; 
+            ctx.strokeRect(item.x, item.y, item.width, item.height);
+            ctx.fillStyle = item.color || '#000000';
+            ctx.textAlign = 'left'; 
+            ctx.textBaseline = 'top';
+            wrapText(ctx, item.text, item.x + 5, item.y + 5, item.width - 10, item.fontSize, true); 
+            ctx.textAlign = 'center';
+        }
+
+        function drawScentCard(item) {
+            const familyColors = {
+                "Floral": { bg: 'rgba(253, 230, 241, 0.8)', border: '#f9a8d4' }, 
+                "Woody": { bg: 'rgba(254, 249, 195, 0.8)', border: '#fde047' }, 
+                "Fresh": { bg: 'rgba(220, 252, 231, 0.8)', border: '#86efac' }, 
+                "Warm / Spiced": { bg: 'rgba(254, 226, 226, 0.8)', border: '#fca5a5' }, 
+                "Atmospheric & Elemental": { bg: 'rgba(219, 234, 254, 0.8)', border: '#93c5fd' }, 
+                "default": { bg: 'rgba(243, 244, 246, 0.8)', border: '#d1d5db' } 
+            };
+            const colors = familyColors[item.scentData.family] || familyColors.default;
+            ctx.save();
+            ctx.fillStyle = colors.bg;
+            ctx.strokeStyle = colors.border;
+            ctx.lineWidth = 1.5; 
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(item.x, item.y, item.width, item.height, [8]); 
+            } else {
+                ctx.rect(item.x, item.y, item.width, item.height);
+            }
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top'; 
+            const worldTextPadding = 10; 
+            const baseFontSizeTerm = 16; 
+            const baseFontSizeDesc = 12; 
+            ctx.fillStyle = '#1f2937'; 
+            ctx.font = `italic bold ${baseFontSizeTerm}px 'Georgia', serif`; 
+            const termDrawY = item.y + worldTextPadding;
+            const textMaxWidth = item.width - 2 * worldTextPadding;
+            const termLines = wrapText(ctx, `"${item.scentData.term}"`, item.x + item.width / 2, termDrawY, textMaxWidth, baseFontSizeTerm, true);
+            ctx.fillStyle = '#374151'; 
+            ctx.font = `${baseFontSizeDesc}px 'Inter', sans-serif`; 
+            const descDrawY = termDrawY + (termLines.length * baseFontSizeTerm * 1.2) + (worldTextPadding / 2); 
+            wrapText(ctx, item.scentData.desc, item.x + item.width / 2, descDrawY, textMaxWidth, baseFontSizeDesc, true);
+            ctx.textAlign = 'center';
+        }
+        
+        function drawAnnotation(item) {
+            ctx.font = `${item.annotation.fontSize}px ${item.annotation.fontFamily || "'Inter', sans-serif"}`; 
+            ctx.fillStyle = item.annotation.color || '#000000';
+            const textMargin = 5; 
+            const lineHeightFactor = 1.2; 
+            const currentLineHeight = item.annotation.fontSize * lineHeightFactor; 
+            let textDrawX, textDrawY; 
+            let currentTextAlign = 'center'; 
+            let currentWrapMaxWidth = item.width; 
+            const position = (item.type === 'image' && item.annotation.position) ? item.annotation.position : 'bottom';
+            const tempLinesForHeight = wrapText(ctx, item.annotation.text, 0, 0, item.width, item.annotation.fontSize, false);
+            const totalTextHeight = (tempLinesForHeight.length * currentLineHeight) - (tempLinesForHeight.length > 0 ? item.annotation.fontSize * (lineHeightFactor - 1) : 0) ; 
+            if (position === 'top') { 
+                currentTextAlign = 'center'; 
+                textDrawX = item.x + item.width / 2; 
+                textDrawY = item.y - textMargin - totalTextHeight;
+            } else if (position === 'left') { 
+                currentTextAlign = 'right'; 
+                currentWrapMaxWidth = Math.max(item.width / 1.5, 80); 
+                const sideLines = wrapText(ctx, item.annotation.text, 0, 0, currentWrapMaxWidth, item.annotation.fontSize, false); 
+                const sideTextHeight = (sideLines.length * currentLineHeight) - (sideLines.length > 0 ? item.annotation.fontSize * (lineHeightFactor - 1) : 0); 
+                textDrawX = item.x - textMargin; 
+                textDrawY = item.y + (item.height / 2) - (sideTextHeight / 2);
+            } else if (position === 'right') { 
+                currentTextAlign = 'left'; 
+                currentWrapMaxWidth = Math.max(item.width / 1.5, 80); 
+                const sideLines = wrapText(ctx, item.annotation.text, 0, 0, currentWrapMaxWidth, item.annotation.fontSize, false); 
+                const sideTextHeight = (sideLines.length * currentLineHeight) - (sideLines.length > 0 ? item.annotation.fontSize * (lineHeightFactor - 1) : 0); 
+                textDrawX = item.x + item.width + textMargin; 
+                textDrawY = item.y + (item.height / 2) - (sideTextHeight / 2);
+            } else {
+                currentTextAlign = 'center'; 
+                textDrawX = item.x + item.width / 2; 
+                textDrawY = item.y + item.height + textMargin; 
+            }
+            ctx.textAlign = currentTextAlign; 
+            ctx.textBaseline = 'top'; 
+            wrapText(ctx, item.annotation.text, textDrawX, textDrawY, currentWrapMaxWidth, item.annotation.fontSize, true);
+            ctx.textAlign = 'center';
+        }
+
+        function drawConnections() {
+            ctx.strokeStyle = connectionLineColor; 
+            ctx.fillStyle = connectionLineColor; 
+            ctx.lineWidth = 2; 
+            connections.forEach(conn => {
+                const fromItem = items.find(item => item.id === conn.fromId); 
+                const toItem = items.find(item => item.id === conn.toId);
+                if (fromItem && toItem) {
+                    const startPoint = getIntersectionWithRectBorder(fromItem, toItem); 
+                    const endPoint = getIntersectionWithRectBorder(toItem, fromItem);
+                    if (startPoint && endPoint) {
+                        ctx.beginPath(); 
+                        ctx.moveTo(startPoint.x, startPoint.y); 
+                        ctx.lineTo(endPoint.x, endPoint.y);
+                        if (conn.lineStyle === 'dashed') { ctx.setLineDash([8, 3]); } 
+                        else if (conn.lineStyle === 'dotted') { ctx.setLineDash([2, 2]); } 
+                        else { ctx.setLineDash([]); }
+                        ctx.stroke(); 
+                        ctx.setLineDash([]);
+                        drawArrowhead(ctx, startPoint.x, startPoint.y, endPoint.x, endPoint.y, 18); 
+                    }
+                }
+            });
+        }
+        
+        function drawSelectionHighlight(item) {
+            ctx.strokeStyle = 'rgba(0, 123, 255, 0.7)'; 
+            ctx.lineWidth = 2; 
+            ctx.strokeRect(item.x, item.y, item.width, item.height);
+            if (item.type === 'image' || item.type === 'audio' || item.type === 'video' || item.type === 'scentCard') { 
+                const handleSize = RESIZE_HANDLE_SIZE;
+                ctx.fillStyle = 'rgba(0, 123, 255, 0.7)';
+                ctx.fillRect(item.x - handleSize / 2, item.y - handleSize / 2, handleSize, handleSize); 
+                ctx.fillRect(item.x + item.width - handleSize / 2, item.y - handleSize / 2, handleSize, handleSize); 
+                ctx.fillRect(item.x - handleSize / 2, item.y + item.height - handleSize / 2, handleSize, handleSize); 
+                ctx.fillRect(item.x + item.width - handleSize / 2, item.y + item.height - handleSize / 2, handleSize, handleSize); 
+            }
+        }
+        
+        function drawArrowhead(context, fromX, fromY, toX, toY, headLength) { 
+            const angle = Math.atan2(toY - fromY, toX - fromX); 
+            const arrowAngle = Math.PI / 5; 
+            context.save(); 
+            context.beginPath(); 
+            context.moveTo(toX, toY); 
+            context.lineTo( toX - headLength * Math.cos(angle - arrowAngle), toY - headLength * Math.sin(angle - arrowAngle) ); 
+            context.lineTo( toX - headLength * Math.cos(angle + arrowAngle), toY - headLength * Math.sin(angle + arrowAngle) ); 
+            context.closePath(); 
+            context.fill(); 
+            context.restore(); 
+        }
+        
+        function wrapText(context, text, x, y, maxWidth, fontSize, doDraw = true) {
+            if (!text) return [{text: '', x: x, y: y}];
+            const words = text.split(' ');
+            let lines = [];
+            let currentLine = '';
+            const actualLineHeight = fontSize * 1.2; 
+            for (let n = 0; n < words.length; n++) {
+                let testLine = currentLine + words[n] + ' ';
+                let metrics = context.measureText(testLine); 
+                let testWidth = metrics.width; 
+                if (testWidth > maxWidth && n > 0 && currentLine.length > 0) { 
+                    const lineToPush = currentLine.trim();
+                    if (doDraw) {
+                        context.fillText(lineToPush, x, y + lines.length * actualLineHeight); 
+                    }
+                    lines.push({ text: lineToPush, x: x, y: y + lines.length * actualLineHeight });
+                    currentLine = words[n] + ' ';
+                } else {
+                    currentLine = testLine;
+                }
+            }
+            const lastLineToPush = currentLine.trim();
+            if (doDraw) {
+                context.fillText(lastLineToPush, x, y + lines.length * actualLineHeight);
+            }
+            lines.push({ text: lastLineToPush, x: x, y: y + lines.length * actualLineHeight });
+            return lines;
+        }
+
+        function drawRadialGuide() {
+            const guideCoreItem = items.find(item => item.id === radialGuideCoreItemId); 
+            if (guideCoreItem && guideCoreItem.type === 'image' && guideCoreItem.isCoreStar) { 
+                const centerX = guideCoreItem.x + guideCoreItem.width / 2;
+                const centerY = guideCoreItem.y + guideCoreItem.height / 2;
+                const baseRadius = Math.min(guideCoreItem.width, guideCoreItem.height);
+                const guideRadii = [baseRadius * 1.5, baseRadius * 3, baseRadius * 5];
+                ctx.save();
+                ctx.strokeStyle = radialGuideLineColor; 
+                ctx.lineWidth = 1 / scale;
+                ctx.setLineDash([4 / scale, 4 / scale]);
+                guideRadii.forEach(radius => {
+                    if (radius > 0) {
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                });
+                ctx.restore();
+            }
+        }
+
+        // --- Event Handlers ---
+        function handleMouseDown(e) {
+            e.preventDefault();
+            if (isAnyModalOpen()) {
+                if (helpModal.style.display === MODAL_DISPLAY_FLEX) {
+                    const modalRect = helpModal.getBoundingClientRect();
+                    if (e.clientX < modalRect.left || e.clientX > modalRect.right || e.clientY < modalRect.top || e.clientY > modalRect.bottom) {
+                        closeHelpModal();
+                        return;
+                    }
+                }
+                if (connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) {
+                   const pickerRect = connectionStylePickerModal.getBoundingClientRect();
+                   if (e.clientX < pickerRect.left || e.clientX > pickerRect.right || e.clientY < pickerRect.top || e.clientY > pickerRect.bottom) {
+                       if (isConnectingMode) { cancelConnectionStyleChoice(); }
+                   }
+                }
+                return;
+            }
+            const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(e); 
+            canvas.dataset.mouseDownWorldX = worldX;
+            canvas.dataset.mouseDownWorldY = worldY; 
+            if (selectedItem) { 
+                const corner = getResizeCorner(worldX, worldY, selectedItem);
+                if (corner) {
+                    isResizing = true;
+                    resizeCorner = corner;
+                    itemInitialDimensions = { 
+                        x: selectedItem.x, y: selectedItem.y, 
+                        width: selectedItem.width, height: selectedItem.height 
+                    };
+                    canvas.style.cursor = getResizeCursor(corner);
+                    return; 
+                }
+            }
+            const clickedItem = getItemAtPos(worldX, worldY);
+            if (isDeletingConnectionMode) { 
+                handleDeleteConnectionClick(worldX, worldY);
+                return; 
+            } 
+            if (isConnectingMode) { 
+                handleConnectModeClick(clickedItem);
+                return; 
+            } 
+            selectedItem = clickedItem; 
+            if (clickedItem) { 
+                isDragging = true; 
+                dragStartCoords = { x: worldX - clickedItem.x, y: worldY - clickedItem.y }; 
+                canvas.style.cursor = 'grabbing'; 
+            } else {
+                isPanning = true; 
+                lastPanCoords = { x: clientX, y: clientY }; 
+                canvas.style.cursor = 'grabbing'; 
+            } 
+            updateButtonStates(); 
+            draw(); 
+        }
+        
+        function handleMouseMove(e) { 
+            e.preventDefault(); 
+            const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(e); 
+            if (isResizing && selectedItem) { 
+                performItemResize(worldX, worldY, selectedItem, resizeCorner, itemInitialDimensions);
+            } else if (isDragging && selectedItem) { 
+                selectedItem.x = worldX - dragStartCoords.x; 
+                selectedItem.y = worldY - dragStartCoords.y; 
+            } else if (isPanning) { 
+                const dx = clientX - lastPanCoords.x; 
+                const dy = clientY - lastPanCoords.y; 
+                translateX += dx; 
+                translateY += dy; 
+                lastPanCoords = { x: clientX, y: clientY }; 
+            } else {
+                updateCursorStyle(worldX, worldY);
+            } 
+            draw(); 
+        }
+        
+        function handleMouseUp(e) { 
+            const { worldX, worldY } = getCanvasCoordinates(e); 
+            const initialMouseDownX = parseFloat(canvas.dataset.mouseDownWorldX); 
+            const initialMouseDownY = parseFloat(canvas.dataset.mouseDownWorldY); 
+            const hasMovedSignificantly = Math.abs(worldX - initialMouseDownX) * scale > 5 || Math.abs(worldY - initialMouseDownY) * scale > 5;
+            const currentItemUnderMouse = getItemAtPos(worldX, worldY); 
+            if (!hasMovedSignificantly && currentItemUnderMouse) { 
+                const currentTime = Date.now();
+                if (currentItemUnderMouse.id === lastTapItemId && (currentTime - lastTapTime) < DOUBLE_TAP_THRESHOLD) { 
+                    if (currentItemUnderMouse.type === 'audio' || currentItemUnderMouse.type === 'video') {
+                        openPlaybackModal(currentItemUnderMouse);
+                    }
+                    lastTapTime = 0;
+                    lastTapItemId = null;
+                } else { 
+                    lastTapTime = currentTime;
+                    lastTapItemId = currentItemUnderMouse.id;
+                    selectedItem = currentItemUnderMouse;
+                }
+            } else if (!hasMovedSignificantly && !currentItemUnderMouse) { 
+                 selectedItem = null;
+                 lastTapItemId = null; 
+            }
+            if (isDragging || isResizing || isPanning) { 
+                saveState(); 
+            } 
+            isDragging = false; 
+            isResizing = false; 
+            isPanning = false; 
+            resizeCorner = null; 
+            canvas.style.cursor = selectedItem ? 'grab' : 'default';
+            updateButtonStates(); 
+            draw(); 
+        }
+
+        function handleMouseLeave(e) { 
+            if (isDragging || isResizing || isPanning) { 
+                handleMouseUp(e); 
+            } 
+            if (!isConnectingMode && !isDeletingConnectionMode && connectionStylePickerModal.style.display === 'none') {
+                canvas.style.cursor = 'default'; 
+            }
+        }
+        
+        function handleWheelZoom(e) { 
+            e.preventDefault(); 
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            zoomCanvas(zoomFactor, e.clientX, e.clientY); 
+            saveState();
+        }
+        
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            if (!touch) return;
+            if (isAnyModalOpen()) {
+                if (helpModal.style.display === MODAL_DISPLAY_FLEX) {
+                    const modalRect = helpModal.getBoundingClientRect();
+                    if (touch.clientX < modalRect.left || touch.clientX > modalRect.right || touch.clientY < modalRect.top || touch.clientY > modalRect.bottom) {
+                        closeHelpModal();
+                    }
+                }
+                return;
+            }
+            const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(touch, true); 
+            touchStartCoords = { x: worldX, y: worldY };
+            if (e.touches.length === 1 && selectedItem ) {
+                const corner = getResizeCorner(worldX, worldY, selectedItem);
+                if (corner) {
+                    isResizing = true;
+                    resizeCorner = corner;
+                    itemInitialDimensions = { 
+                        x: selectedItem.x, y: selectedItem.y, 
+                        width: selectedItem.width, height: selectedItem.height 
+                    };
+                    return; 
+                }
+            }
+            const tappedItem = getItemAtPos(worldX, worldY); 
+            if (isDeletingConnectionMode) { 
+                handleDeleteConnectionClick(worldX, worldY);
+                return; 
+            } 
+            if (isConnectingMode) { 
+                handleConnectModeClick(tappedItem);
+                return; 
+            } 
+            selectedItem = tappedItem; 
+            if (e.touches.length === 1) { 
+                if(tappedItem) {
+                    isDragging = true; 
+                    dragStartCoords = { x: worldX - tappedItem.x, y: worldY - tappedItem.y }; 
+                } else { 
+                    isPanning = true; 
+                    lastPanCoords = { x: clientX, y: clientY }; 
+                }
+            } else if (e.touches.length === 2) { 
+                isPanning = false; isDragging = false; isResizing = false;
+                const touch1 = e.touches[0]; 
+                const touch2 = e.touches[1]; 
+                initialPinchDistance = getDistance( 
+                    { x: touch1.clientX, y: touch1.clientY }, 
+                    { x: touch2.clientX, y: touch2.clientY } 
+                ); 
+            } 
+            updateButtonStates(); 
+            draw();
+        }
+
+        function handleTouchMove(e) { 
+            e.preventDefault(); 
+            if (isConnectingMode || isDeletingConnectionMode || connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) return; 
+            if (e.touches.length === 1 && !initialPinchDistance) {
+                const touch = e.touches[0]; 
+                const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(touch, true); 
+                if (isResizing && selectedItem) {
+                    performItemResize(worldX, worldY, selectedItem, resizeCorner, itemInitialDimensions);
+                } else if (isDragging && selectedItem) { 
+                    selectedItem.x = worldX - dragStartCoords.x; 
+                    selectedItem.y = worldY - dragStartCoords.y; 
+                } else if (isPanning) { 
+                    const dx = clientX - lastPanCoords.x; 
+                    const dy = clientY - lastPanCoords.y; 
+                    translateX += dx; 
+                    translateY += dy; 
+                    lastPanCoords = { x: clientX, y: clientY }; 
+                } 
+                draw(); 
+            } else if (e.touches.length === 2) {
+                const touch1 = e.touches[0]; 
+                const touch2 = e.touches[1]; 
+                const currentPinchDistance = getDistance( 
+                    { x: touch1.clientX, y: touch1.clientY }, 
+                    { x: touch2.clientX, y: touch2.clientY } 
+                ); 
+                if (initialPinchDistance) { 
+                    const zoomFactor = currentPinchDistance / initialPinchDistance; 
+                    const midX = (touch1.clientX + touch2.clientX) / 2; 
+                    const midY = (touch1.clientY + touch2.clientY) / 2; 
+                    zoomCanvas(zoomFactor, midX, midY, true);
+                    initialPinchDistance = currentPinchDistance;
+                } 
+            } 
+        }
+        
+        function handleTouchEnd(e) { 
+            if (isConnectingMode || isDeletingConnectionMode || connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) {
+                if (initialPinchDistance) initialPinchDistance = null;
+                return;
+            }
+            const touch = e.changedTouches[0];
+            if (!touch) return;
+            const { worldX, worldY } = getCanvasCoordinates(touch, true);
+            const initialTouchDownX = touchStartCoords.x;
+            const initialTouchDownY = touchStartCoords.y;
+            const hasMovedSignificantly = Math.abs(worldX - initialTouchDownX) * scale > 10 || Math.abs(worldY - initialTouchDownY) * scale > 10;
+            const tappedItem = getItemAtPos(worldX, worldY);
+            if (!hasMovedSignificantly && tappedItem) {
+                const currentTime = Date.now();
+                if (tappedItem.id === lastTapItemId && (currentTime - lastTapTime) < DOUBLE_TAP_THRESHOLD) {
+                    if (tappedItem.type === 'audio' || tappedItem.type === 'video') {
+                        openPlaybackModal(tappedItem);
+                    }
+                    lastTapTime = 0; 
+                    lastTapItemId = null;
+                } else {
+                    lastTapTime = currentTime;
+                    lastTapItemId = tappedItem.id;
+                    selectedItem = tappedItem;
+                }
+            } else if (!hasMovedSignificantly && !tappedItem) {
+                selectedItem = null;
+                lastTapItemId = null;
+            }
+            if (isDragging || isResizing || isPanning || initialPinchDistance) { 
+                saveState(); 
+            } 
+            isDragging = false; 
+            isResizing = false; 
+            isPanning = false; 
+            resizeCorner = null; 
+            initialPinchDistance = null;
+            updateButtonStates(); 
+            draw(); 
+        }
+
+        function performItemResize(currentWorldX, currentWorldY, item, corner, initialDims) {
+            let newX = initialDims.x;
+            let newY = initialDims.y;
+            let newWidth = initialDims.width;
+            let newHeight = initialDims.height;
+            const maintainAspectRatio = item.type === 'image' || item.type === 'audio' || item.type === 'video';
+            const aspectRatio = (maintainAspectRatio && item.originalWidth && item.originalHeight) ?
+                                item.originalWidth / item.originalHeight : 1;
+            switch (corner) {
+                case 'br':
+                    newWidth = currentWorldX - initialDims.x;
+                    newHeight = maintainAspectRatio ? newWidth / aspectRatio : currentWorldY - initialDims.y;
+                    break;
+                case 'bl':
+                    newWidth = (initialDims.x + initialDims.width) - currentWorldX;
+                    newX = currentWorldX;
+                    newHeight = maintainAspectRatio ? newWidth / aspectRatio : currentWorldY - initialDims.y;
+                    break;
+                case 'tr':
+                    newWidth = currentWorldX - initialDims.x;
+                    newHeight = maintainAspectRatio ? newWidth / aspectRatio : (initialDims.y + initialDims.height) - currentWorldY;
+                    newY = maintainAspectRatio ? (initialDims.y + initialDims.height) - newHeight : currentWorldY;
+                    break;
+                case 'tl':
+                    newWidth = (initialDims.x + initialDims.width) - currentWorldX;
+                    newX = currentWorldX;
+                    newHeight = maintainAspectRatio ? newWidth / aspectRatio : (initialDims.y + initialDims.height) - currentWorldY;
+                    newY = maintainAspectRatio ? (initialDims.y + initialDims.height) - newHeight : currentWorldY;
+                    break;
+            }
+            item.width = Math.max(newWidth, MIN_ITEM_SIZE);
+            item.height = Math.max(newHeight, maintainAspectRatio ? item.width / aspectRatio : MIN_ITEM_SIZE);
+            if (maintainAspectRatio) {
+                if (newWidth < MIN_ITEM_SIZE && newWidth === item.width) {
+                    item.height = Math.max(item.width / aspectRatio, MIN_ITEM_SIZE / aspectRatio);
+                } else if (newHeight < MIN_ITEM_SIZE && newHeight === item.height) {
+                     item.width = Math.max(item.height * aspectRatio, MIN_ITEM_SIZE * aspectRatio);
+                }
+            }
+            if (corner.includes('l')) {
+                item.x = (initialDims.x + initialDims.width) - item.width;
+            } else {
+                item.x = newX;
+            }
+            if (corner.includes('t')) {
+                item.y = (initialDims.y + initialDims.height) - item.height;
+            } else {
+                item.y = newY;
+            }
+        }
+        
+        function handleDeleteConnectionClick(worldX, worldY) {
+            const clickedConnection = getConnectionAtPos(worldX, worldY); 
+            if (clickedConnection) { 
+                connections = connections.filter(conn => conn.id !== clickedConnection.id); 
+                showMessage("Connection deleted."); 
+                saveState(); 
+                draw(); 
+            } 
+            toggleDeleteConnectionMode();
+            updateButtonStates(); 
+            draw();
+        }
+
+        function handleConnectModeClick(clickedItem) {
+            if (clickedItem) {
+                if (!connectionStartItem) { 
+                    connectionStartItem = clickedItem; 
+                    showMessage(`Selected '${clickedItem.id.substring(0,5)}...' as start. Click another item.`); 
+                } else if (connectionStartItem.id !== clickedItem.id) { 
+                    const existingConnection = connections.find(c => 
+                        (c.fromId === connectionStartItem.id && c.toId === clickedItem.id) || 
+                        (c.fromId === clickedItem.id && c.toId === connectionStartItem.id) 
+                    ); 
+                    if (existingConnection) { 
+                        showMessage("Connection already exists."); 
+                        toggleConnectMode();
+                    } else { 
+                        pendingConnectionDetails = { startItem: connectionStartItem, endItem: clickedItem };
+                        connectionStylePickerModal.style.display = MODAL_DISPLAY_BLOCK; 
+                        const canvasRect = canvas.getBoundingClientRect();
+                        connectionStylePickerModal.style.left = `${canvasRect.left + canvas.width/2}px`;
+                        connectionStylePickerModal.style.top = `${canvasRect.top + canvas.height/2}px`;
+                    } 
+                } 
+            } else { 
+                if (connectionStartItem) { showMessage("Connection cancelled."); } 
+                toggleConnectMode();
+            } 
+            updateButtonStates(); 
+            draw();
+        }
+
+        function updateCursorStyle(worldX, worldY) {
+            if (isConnectingMode || isDeletingConnectionMode) { 
+                canvas.style.cursor = isDeletingConnectionMode && getConnectionAtPos(worldX, worldY) ? 'not-allowed' : 'crosshair'; 
+            } else if (selectedItem && (selectedItem.type === 'image' || selectedItem.type === 'audio' || selectedItem.type === 'video' || selectedItem.type === 'scentCard')) { 
+                const corner = getResizeCorner(worldX, worldY, selectedItem); 
+                canvas.style.cursor = corner ? getResizeCursor(corner) : (getItemAtPos(worldX, worldY) ? 'grab' : 'default'); 
+            } else { 
+                canvas.style.cursor = getItemAtPos(worldX, worldY) ? 'grab' : 'default'; 
+            } 
+        }
+        
+        // --- Item & Connection Management ---
+        function triggerUpload(acceptType) {
+            uploadInput.accept = acceptType;
+            uploadInput.click();
+        }
+
+        function handleFileUpload(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) {
+                e.target.value = null;
+                return;
+            }
+            showLoading(true);
+            let filesToProcess = Array.from(files).length;
+            let loadedCount = 0;
+            Array.from(files).forEach(file => {
+                if (file.size > MAX_FILE_SIZE) {
+                    showMessage(`File "${file.name}" exceeds ${MAX_FILE_SIZE / (1024*1024)} MB limit.`, 4000);
+                    filesToProcess--;
+                    if (filesToProcess === 0) {
+                        finalizeUpload(loadedCount, files.length);
+                    }
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const fileType = file.type.split('/')[0];
+                    const dataUrl = event.target.result;
+                    const commonProperties = {
+                        src: dataUrl,
+                        x: (canvas.width / 2 - DEFAULT_AUDIO_VIDEO_WIDTH / 2 - translateX) / scale, 
+                        y: (canvas.height / 2 - DEFAULT_AUDIO_VIDEO_HEIGHT / 2 - translateY) / scale,
+                        zIndex: items.length,
+                        id: generateUniqueId('item'),
+                        annotation: null,
+                        createdAt: new Date().toISOString()
+                    };
+                    if (fileType === 'image') {
+                        const img = new Image();
+                        img.onload = () => {
+                            const aspectRatio = img.width / img.height;
+                            const newItem = {
+                                ...commonProperties,
+                                type: 'image',
+                                img: img,
+                                x: (canvas.width / 2 - DEFAULT_IMAGE_WIDTH / 2 - translateX) / scale, 
+                                y: (canvas.height / 2 - (DEFAULT_IMAGE_WIDTH/aspectRatio) / 2 - translateY) / scale,
+                                width: DEFAULT_IMAGE_WIDTH,
+                                height: DEFAULT_IMAGE_WIDTH / aspectRatio,
+                                originalWidth: img.width,
+                                originalHeight: img.height,
+                                borderColor: '#000000',
+                                borderWidth: 0,
+                                isCoreStar: false,
+                                isEndNode: false
+                            };
+                            items.push(newItem);
+                            selectedItem = newItem;
+                            loadedCount++;
+                            filesToProcess--;
+                            if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                        };
+                        img.onerror = () => {
+                            console.error("Error loading image:", file.name);
+                            showMessage(`Error loading image: ${file.name}`);
+                            filesToProcess--;
+                            if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                        };
+                        img.src = dataUrl;
+                    } else if (fileType === 'audio' || fileType === 'video') {
+                        const newItem = {
+                            ...commonProperties,
+                            type: fileType,
+                            width: DEFAULT_AUDIO_VIDEO_WIDTH, 
+                            height: DEFAULT_AUDIO_VIDEO_HEIGHT,
+                            originalWidth: DEFAULT_AUDIO_VIDEO_WIDTH, 
+                            originalHeight: DEFAULT_AUDIO_VIDEO_HEIGHT
+                        };
+                        items.push(newItem);
+                        selectedItem = newItem;
+                        loadedCount++;
+                        filesToProcess--;
+                        if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                    } else {
+                        console.warn("Unsupported file type:", file.name, file.type);
+                        filesToProcess--;
+                         if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                    }
+                };
+                reader.onerror = () => {
+                    console.error("Error reading file:", file.name);
+                    showMessage(`Error reading file: ${file.name}`);
+                     filesToProcess--;
+                     if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                };
+                reader.readAsDataURL(file);
+            });
+            e.target.value = null;
+        }
+
+        function finalizeUpload(loadedCount, totalFilesAttempted) {
+            saveState();
+            updateButtonStates();
+            draw();
+            showLoading(false);
+            if (loadedCount > 0) {
+                showMessage(`${loadedCount} file(s) loaded.`);
+            }
+            if (loadedCount < totalFilesAttempted) {
+                showMessage(`Some files could not be processed. ${loadedCount} of ${totalFilesAttempted} loaded successfully.`, 5000);
+            }
+        }
+        
+        function deleteSelectedItem() { 
+            if (!selectedItem) return; 
+            const itemIdToDelete = selectedItem.id; 
+            items = items.filter(item => item.id !== itemIdToDelete); 
+            connections = connections.filter(conn => conn.fromId !== itemIdToDelete && conn.toId !== itemIdToDelete); 
+            if (radialGuideCoreItemId === itemIdToDelete) { 
+                showRadialGuide = false;
+                radialGuideCoreItemId = null;
+            }
+            selectedItem = null; 
+            saveState(); 
+            updateButtonStates(); 
+            draw(); 
+            showMessage("Item deleted."); 
+        }
+        
+        function toggleCoreStar() { 
+            if (selectedItem && selectedItem.type === 'image') { 
+                const wasCoreStar = selectedItem.isCoreStar; 
+                const currentItemId = selectedItem.id;
+                selectedItem.isCoreStar = !selectedItem.isCoreStar; 
+                if (selectedItem.isCoreStar) { 
+                    selectedItem.isEndNode = false;
+                    showMessage(`Image marked as Core Star.`); 
+                } else { 
+                    showMessage(`Image unmarked as Core Star.`); 
+                    if (wasCoreStar && radialGuideCoreItemId === currentItemId) {
+                        showRadialGuide = false;
+                        radialGuideCoreItemId = null;
+                    }
+                } 
+                saveState(); draw(); updateButtonStates(); 
+            } 
+        }
+
+        function toggleEndNode() { 
+            if (selectedItem && selectedItem.type === 'image') { 
+                selectedItem.isEndNode = !selectedItem.isEndNode; 
+                if (selectedItem.isEndNode) { 
+                    selectedItem.isCoreStar = false;
+                    showMessage(`Image marked as End Node.`); 
+                    if (radialGuideCoreItemId === selectedItem.id && selectedItem.isCoreStar === false) {
+                        showRadialGuide = false; 
+                        radialGuideCoreItemId = null; 
+                    } 
+                } else { 
+                    showMessage(`Image unmarked as End Node.`); 
+                } 
+                saveState(); draw(); updateButtonStates(); 
+            } 
+        }
+        
+        function changeZIndex(bringToFront) { 
+            if (!selectedItem) return; 
+            let minZ = Infinity, maxZ = -Infinity;
+            if (items.length > 0) {
+                items.forEach(item => { 
+                    const z = item.zIndex || 0; 
+                    if (z < minZ) minZ = z; 
+                    if (z > maxZ) maxZ = z; 
+                });
+            } else {
+                minZ = 0; maxZ = 0;
+            }
+            if (bringToFront) { 
+                selectedItem.zIndex = maxZ + 1; 
+            } else { 
+                selectedItem.zIndex = minZ - 1; 
+            } 
+            items.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)); 
+            items.forEach((item, index) => { item.zIndex = index; }); 
+            saveState(); 
+            draw(); 
+        }
+
+        // --- Annotation & Styling ---
+        function openAnnotationModal() { 
+            if (!selectedItem) return;
+            if (selectedItem.type === 'textNode') {
+                openTextNodeModalForEdit(selectedItem);
+                return;
+            }
+            if (selectedItem.type === 'scentCard') {
+                showMessage("Scent cards cannot be annotated or styled further.");
+                return;
+            }
+            annotationModalTitle.textContent = 'Annotate / Style Item';
+            submitAnnotationBtn.textContent = "Apply Changes";
+            const annotation = selectedItem.annotation || {};
+            annotationText.value = annotation.text || '';
+            annotationColorInput.value = annotation.color || '#000000';
+            annotationFontSizeInput.value = annotation.fontSize || 12;
+            annotationFontFamilyInput.value = annotation.fontFamily || "'Inter', sans-serif"; 
+            if (selectedItem.type === 'image') {
+                imageSpecificControls.style.display = 'block';
+                annotationPositionInput.value = annotation.position || 'bottom';
+                imageBorderColorInput.value = selectedItem.borderColor || '#000000';
+                imageBorderWidthInput.value = selectedItem.borderWidth || 0;
+            } else {
+                imageSpecificControls.style.display = 'none';
+            }
+            annotationModal.style.display = MODAL_DISPLAY_BLOCK;
+            annotationText.focus();
+        }
+
+        function closeAnnotationModal() { 
+            annotationModal.style.display = 'none'; 
+        }
+
+        function handleSubmitAnnotation() { 
+            if (!selectedItem || selectedItem.type === 'textNode' || selectedItem.type === 'scentCard') return; 
+            const text = annotationText.value.trim(); 
+            const color = annotationColorInput.value; 
+            const fontSize = parseInt(annotationFontSizeInput.value, 10); 
+            const fontFamily = annotationFontFamilyInput.value; 
+            let message = "";
+            if (selectedItem.type === 'image') {
+                const position = annotationPositionInput.value; 
+                selectedItem.borderColor = imageBorderColorInput.value; 
+                selectedItem.borderWidth = parseInt(imageBorderWidthInput.value, 10) || 0; 
+                if (!text && selectedItem.annotation) {
+                    selectedItem.annotation = null; 
+                    message = "Annotation removed. Image style updated."; 
+                } else if (text && fontSize > 0) {
+                    const wasAnnotationNull = !selectedItem.annotation; 
+                    selectedItem.annotation = { text, color, fontSize, fontFamily, position }; 
+                    message = wasAnnotationNull ? "Annotation added. Image style updated." : "Annotation and style updated."; 
+                } else {
+                    message = "Image style updated.";
+                }
+            } else {
+                if (!text && selectedItem.annotation) {
+                    selectedItem.annotation = null; 
+                    message = "Annotation removed.";
+                } else if (text && fontSize > 0) {
+                     const wasAnnotationNull = !selectedItem.annotation; 
+                    selectedItem.annotation = { text, color, fontSize, fontFamily }; 
+                    message = wasAnnotationNull ? "Annotation added." : "Annotation updated.";
+                }
+            }
+            if (message) showMessage(message);
+            closeAnnotationModal(); 
+            saveState(); 
+            draw(); 
+            updateButtonStates(); 
+        }
+
+        // --- Text Node Modal ---
+        function openTextNodeModalForAdd() {
+            editingTextNode = null;
+            textNodeModalTitle.textContent = "Add Text Snippet";
+            submitTextNodeBtn.textContent = "Add Snippet";
+            textNodeContent.value = '';
+            textNodeColorInput.value = '#000000';
+            textNodeFontSizeInput.value = 16;
+            textNodeFontFamilyInput.value = "'Inter', sans-serif"; 
+            textNodeBgColorInput.value = '#FFFFFF'; 
+            textNodeDefaultWidthInput.value = DEFAULT_TEXT_NODE_WIDTH;
+            textNodeDefaultWidthInput.disabled = false;
+            textNodeModal.style.display = MODAL_DISPLAY_BLOCK;
+            textNodeContent.focus();
+        }
+
+        function openTextNodeModalForEdit(textNode) {
+            editingTextNode = textNode;
+            textNodeModalTitle.textContent = "Edit Text Snippet";
+            submitTextNodeBtn.textContent = "Update Snippet";
+            textNodeContent.value = textNode.text;
+            textNodeColorInput.value = textNode.color || '#000000';
+            textNodeFontSizeInput.value = textNode.fontSize || 16;
+            textNodeFontFamilyInput.value = textNode.fontFamily || "'Inter', sans-serif"; 
+            textNodeBgColorInput.value = textNode.backgroundColor || '#FFFFFF';
+            textNodeDefaultWidthInput.value = textNode.width;
+            textNodeDefaultWidthInput.disabled = true;
+            textNodeModal.style.display = MODAL_DISPLAY_BLOCK;
+            textNodeContent.focus();
+        }
+
+        function closeTextNodeModal() {
+            textNodeModal.style.display = 'none';
+            editingTextNode = null;
+        }
+
+        function handleSubmitTextNode() {
+            const text = textNodeContent.value.trim();
+            const color = textNodeColorInput.value;
+            const fontSize = parseInt(textNodeFontSizeInput.value, 10);
+            const fontFamily = textNodeFontFamilyInput.value; 
+            const bgColor = textNodeBgColorInput.value;
+            const defaultWidth = parseInt(textNodeDefaultWidthInput.value, 10);
+            if (!text || fontSize <= 0 || defaultWidth <= 0) {
+                showMessage("Please enter text, and ensure font size & width are positive.");
+                return;
+            }
+            if (editingTextNode) {
+                editingTextNode.text = text;
+                editingTextNode.color = color;
+                editingTextNode.fontSize = fontSize;
+                editingTextNode.fontFamily = fontFamily; 
+                editingTextNode.backgroundColor = bgColor;
+                showMessage("Text snippet updated.");
+            } else {
+                const tempCtx = document.createElement('canvas').getContext('2d');
+                tempCtx.font = `${fontSize}px ${fontFamily}`; 
+                const lines = wrapText(tempCtx, text, 0, 0, defaultWidth - 10, fontSize, false);
+                const initialHeight = (lines.length * fontSize * 1.2) + 10;
+                const newItem = {
+                    type: 'textNode',
+                    id: generateUniqueId('text'),
+                    text: text,
+                    x: (canvas.width / 2 - defaultWidth / 2 - translateX) / scale,
+                    y: (canvas.height / 2 - initialHeight / 2 - translateY) / scale,
+                    width: defaultWidth,
+                    height: initialHeight, 
+                    fontSize: fontSize,
+                    fontFamily: fontFamily, 
+                    color: color,
+                    backgroundColor: bgColor,
+                    zIndex: items.length,
+                    createdAt: new Date().toISOString()
+                };
+                items.push(newItem);
+                selectedItem = newItem;
+                showMessage("Text snippet added.");
+            }
+            closeTextNodeModal();
+            saveState();
+            draw();
+            updateButtonStates();
+        }
+
+        // --- Connection Styling ---
+        function handleConnectionStyleChoice(style) {
+            if (pendingConnectionDetails && pendingConnectionDetails.startItem && pendingConnectionDetails.endItem) {
+                connections.push({ 
+                    id: generateUniqueId('conn'), 
+                    fromId: pendingConnectionDetails.startItem.id, 
+                    toId: pendingConnectionDetails.endItem.id, 
+                    lineStyle: style 
+                });
+                showMessage(`Connection added with ${style} style.`);
+                saveState();
+            }
+            connectionStylePickerModal.style.display = 'none';
+            pendingConnectionDetails = null;
+            if(isConnectingMode) toggleConnectMode();
+            draw();
+            updateButtonStates();
+        }
+
+        function cancelConnectionStyleChoice() {
+            connectionStylePickerModal.style.display = 'none';
+            pendingConnectionDetails = null;
+            if(isConnectingMode) {
+                showMessage("Connection cancelled.");
+                toggleConnectMode();
+            }
+            draw();
+            updateButtonStates();
+        }
+        
+        // --- Radial Guide ---
+        function toggleRadialGuide() {
+            if (showRadialGuide) {
+                showRadialGuide = false;
+                radialGuideCoreItemId = null;
+                showMessage("Radial guide OFF.");
+            } else if (selectedItem && selectedItem.type === 'image' && selectedItem.isCoreStar) {
+                showRadialGuide = true;
+                radialGuideCoreItemId = selectedItem.id;
+                showMessage("Radial guide ON for selected Core Star.");
+            } else {
+                showMessage("Select a Core Star to activate its radial guide.");
+            }
+            updateButtonStates(); 
+            draw(); 
+            saveState(); 
+        }
+
+        function updateRadialGuideColor() {
+            const brightness = getBrightness(canvasBackgroundColor);
+            if (brightness < 128) {
+                radialGuideLineColor = 'rgba(220, 220, 220, 0.35)'; 
+            } else {
+                radialGuideLineColor = 'rgba(100, 100, 100, 0.35)'; 
+            }
+        }
+
+        // --- UI Updates & State ---
+        function updateButtonStates() {
+            const isItemSelected = !!selectedItem;
+            const isImageSelected = selectedItem && selectedItem.type === 'image';
+            const isScentCardSelected = selectedItem && selectedItem.type === 'scentCard';
+            const isTextNodeSelected = selectedItem && selectedItem.type === 'textNode';
+            styleOrAnnotateBtn.disabled = !isItemSelected || isScentCardSelected;
+            styleOrAnnotateBtn.classList.toggle('disabled', styleOrAnnotateBtn.disabled);
+            if(isScentCardSelected) {
+               styleOrAnnotateBtn.title = "Scent cards cannot be styled further.";
+            } else if (isTextNodeSelected) {
+                styleOrAnnotateBtn.title = "Edit Text Snippet (A)";
+            } else {
+               styleOrAnnotateBtn.title = "Annotate / Style Item (A)";
+            }
+            deleteItemBtn.disabled = !isItemSelected;
+            deleteItemBtn.classList.toggle('disabled', deleteItemBtn.disabled);
+            coreStarBtn.disabled = !isImageSelected; 
+            coreStarBtn.classList.toggle('disabled', coreStarBtn.disabled);
+            coreStarBtn.classList.toggle('active-mode', isImageSelected && selectedItem.isCoreStar);
+            coreStarBtn.title = (isImageSelected && selectedItem.isCoreStar) ? "Unmark as Core Star" : "Mark as Core Star";
+            toggleEndNodeBtn.disabled = !isImageSelected;
+            toggleEndNodeBtn.classList.toggle('disabled', toggleEndNodeBtn.disabled);
+            toggleEndNodeBtn.classList.toggle('active-mode-endnode', isImageSelected && selectedItem.isEndNode);
+            toggleEndNodeBtn.title = (isImageSelected && selectedItem.isEndNode) ? "Unmark as End Node" : "Mark as End Node";
+            bringToFrontBtn.disabled = !isItemSelected; 
+            bringToFrontBtn.classList.toggle('disabled', bringToFrontBtn.disabled);
+            sendToBackBtn.disabled = !isItemSelected; 
+            sendToBackBtn.classList.toggle('disabled', sendToBackBtn.disabled);
+            connectImagesBtn.classList.toggle('active-mode', isConnectingMode);
+            deleteConnectionBtn.classList.toggle('active-mode', isDeletingConnectionMode);
+            const canInitiateRadialGuide = selectedItem && selectedItem.type === 'image' && selectedItem.isCoreStar;
+            toggleRadialGuideBtn.disabled = !canInitiateRadialGuide && !showRadialGuide;
+            toggleRadialGuideBtn.classList.toggle('disabled', toggleRadialGuideBtn.disabled);
+            toggleRadialGuideBtn.classList.toggle('active-mode-radial', showRadialGuide);
+        }
+
+        function saveState() {
+            if (history.length >= MAX_HISTORY_STATES) { 
+                history.shift();
+            }
+            const state = {
+                items: JSON.parse(JSON.stringify(items.map(item => { 
+                    if (item.type === 'image' && item.img) { 
+                        const { img, ...rest } = item;
+                        return { ...rest, src: item.src };
+                    }
+                    return { ...item }; 
+                }))),
+                connections: JSON.parse(JSON.stringify(connections)),
+                scale: scale, 
+                translateX: translateX, 
+                translateY: translateY,
+                canvasBackgroundColor: canvasBackgroundColor, 
+                connectionLineColor: connectionLineColor,
+                radialGuideLineColor: radialGuideLineColor, 
+                showRadialGuide: showRadialGuide,
+                radialGuideCoreItemId: radialGuideCoreItemId
+            };
+            history.push(state); 
+            redoStack = [];
+            updateUndoRedoButtons();
+        }
+
+		async function loadState(stateOrBoardData) {
+            showLoading(true);
+            if (stateOrBoardData.transform && typeof stateOrBoardData.scale === 'undefined') { 
+                scale = stateOrBoardData.transform.scale || 1; 
+                translateX = stateOrBoardData.transform.translateX || 0; 
+                translateY = stateOrBoardData.transform.translateY || 0;
+            } else { 
+                scale = stateOrBoardData.scale || 1; 
+                translateX = stateOrBoardData.translateX || 0; 
+                translateY = stateOrBoardData.translateY || 0;
+            }
+            canvasBackgroundColor = stateOrBoardData.canvasBackgroundColor || '#ffffff'; 
+            bgColorPicker.value = canvasBackgroundColor; 
+            canvas.style.backgroundColor = canvasBackgroundColor;
+            connectionLineColor = stateOrBoardData.connectionLineColor || '#4A5568'; 
+            arrowColorPicker.value = connectionLineColor;
+            radialGuideLineColor = stateOrBoardData.radialGuideLineColor || getComputedRadialGuideColor();
+            connections = (stateOrBoardData.connections ? JSON.parse(JSON.stringify(stateOrBoardData.connections)) : [])
+                            .map(conn => ({ ...conn, lineStyle: conn.lineStyle || 'solid' }));
+            const newItems = [];
+            if (stateOrBoardData.items) { 
+                for (const itemData of stateOrBoardData.items) { 
+                    try {
+                        let loadedItem = { ...itemData };
+                        if (itemData.type === 'image' && itemData.src) { 
+                            const img = await loadImagePromise(itemData.src);
+                            loadedItem.img = img;
+                            loadedItem.borderColor = itemData.borderColor || '#000000';
+                            loadedItem.borderWidth = typeof itemData.borderWidth === 'number' ? itemData.borderWidth : 0;
+                            loadedItem.isCoreStar = itemData.isCoreStar || false;
+                            loadedItem.isEndNode = itemData.isEndNode || false;
+                        } else if (itemData.type === 'audio' || itemData.type === 'video') {
+                            loadedItem.width = itemData.width || DEFAULT_AUDIO_VIDEO_WIDTH;
+                            loadedItem.height = itemData.height || DEFAULT_AUDIO_VIDEO_HEIGHT;
+                            loadedItem.originalWidth = itemData.originalWidth || loadedItem.width;
+                            loadedItem.originalHeight = itemData.originalHeight || loadedItem.height;
+                        } else if (itemData.type === 'textNode') { 
+                            loadedItem.fontSize = itemData.fontSize || 16;
+                            loadedItem.fontFamily = itemData.fontFamily || "'Inter', sans-serif"; 
+                            loadedItem.color = itemData.color || '#000000';
+                            loadedItem.backgroundColor = itemData.backgroundColor || 'rgba(255,255,255,0.7)';
+                            loadedItem.width = itemData.width || DEFAULT_TEXT_NODE_WIDTH;
+                        } else if (itemData.type === 'scentCard') {
+                        }
+                        if (itemData.annotation) {
+                            loadedItem.annotation = {
+                                ...itemData.annotation,
+                                fontFamily: itemData.annotation.fontFamily || "'Inter', sans-serif",
+                                position: (itemData.type === 'image' && itemData.annotation.position) ? itemData.annotation.position : 'bottom'
+                            };
+                        } else {
+                            loadedItem.annotation = null;
+                        }
+                        loadedItem.createdAt = itemData.createdAt || new Date().toISOString();
+                        newItems.push(loadedItem);
+                    } catch (error) { 
+                        console.error("Error processing item during state load:", itemData, error); 
+                        showMessage("Error loading an item during restoration."); 
+                    }
+                }
+            }
+            items = newItems; 
+            selectedItem = null;
+            showRadialGuide = stateOrBoardData.showRadialGuide || false;
+            radialGuideCoreItemId = stateOrBoardData.radialGuideCoreItemId || null;
+            if (showRadialGuide && radialGuideCoreItemId) {
+                const guideCore = items.find(item => item.id === radialGuideCoreItemId);
+                if (!guideCore || guideCore.type !== 'image' || !guideCore.isCoreStar) {
+                    showRadialGuide = false;
+                    radialGuideCoreItemId = null;
+                }
+            } else { 
+                 showRadialGuide = false;
+                 radialGuideCoreItemId = null;
+            }
+            showLoading(false); 
+            draw(); 
+            updateUndoRedoButtons(); 
+            updateButtonStates();   
+        }
+
+        function undo() { 
+            if (history.length > 1) {
+                const currentState = history.pop(); 
+                redoStack.push(currentState); 
+                const prevState = history[history.length - 1]; 
+                loadState(JSON.parse(JSON.stringify(prevState)));
+            } 
+        }
+        function redo() { 
+            if (redoStack.length > 0) { 
+                const nextState = redoStack.pop(); 
+                history.push(nextState); 
+                loadState(JSON.parse(JSON.stringify(nextState)));
+            } 
+        }
+        function updateUndoRedoButtons() { 
+            undoBtn.classList.toggle('disabled', history.length <= 1); 
+            undoBtn.disabled = history.length <= 1; 
+            redoBtn.classList.toggle('disabled', redoStack.length === 0); 
+            redoBtn.disabled = redoStack.length === 0; 
+        }
+
+        // --- General Helpers ---
+        function generateUniqueId(prefix = 'id') {
+            return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        }
+
+        function getBrightness(hexColor) { 
+            const r = parseInt(hexColor.slice(1, 3), 16); 
+            const g = parseInt(hexColor.slice(3, 5), 16); 
+            const b = parseInt(hexColor.slice(5, 7), 16); 
+            return (r * 299 + g * 587 + b * 114) / 1000;
+        }
+
+        function getComputedRadialGuideColor() {
+            const brightness = getBrightness(canvasBackgroundColor);
+            return brightness < 128 ? 'rgba(220, 220, 220, 0.35)' : 'rgba(100, 100, 100, 0.35)';
+        }
+
+        function getIntersectionWithRectBorder(rect, targetItemForCenter) { 
+            const { x, y, width, height } = rect; 
+            const rectCenterX = x + width / 2; 
+            const rectCenterY = y + height / 2; 
+            const targetCenterX = targetItemForCenter.x + targetItemForCenter.width / 2; 
+            const targetCenterY = targetItemForCenter.y + targetItemForCenter.height / 2; 
+            const dx = targetCenterX - rectCenterX; 
+            const dy = targetCenterY - rectCenterY; 
+            if (Math.abs(dx) < EPSILON && Math.abs(dy) < EPSILON) return { x: rectCenterX, y: rectCenterY };
+            let tMin = Infinity; 
+            let intersection = null; 
+            if (Math.abs(dy) > EPSILON) { 
+                const t = (y - rectCenterY) / dy; 
+                if (t >= -EPSILON && t <= 1 + EPSILON && t < tMin) { 
+                    const ix = rectCenterX + t * dx; 
+                    if (ix >= x - EPSILON && ix <= x + width + EPSILON) { tMin = t; intersection = { x: ix, y: y }; } 
+                } 
+                const t2 = (y + height - rectCenterY) / dy; 
+                if (t2 >= -EPSILON && t2 <= 1 + EPSILON && t2 < tMin) { 
+                    const ix2 = rectCenterX + t2 * dx; 
+                    if (ix2 >= x - EPSILON && ix2 <= x + width + EPSILON) { tMin = t2; intersection = { x: ix2, y: y + height }; } 
+                } 
+            } 
+            if (Math.abs(dx) > EPSILON) { 
+                const t = (x - rectCenterX) / dx; 
+                if (t >= -EPSILON && t <= 1 + EPSILON && t < tMin) { 
+                    const iy = rectCenterY + t * dy; 
+                    if (iy >= y - EPSILON && iy <= y + height + EPSILON) { tMin = t; intersection = { x: x, y: iy };} 
+                } 
+                const t2 = (x + width - rectCenterX) / dx; 
+                if (t2 >= -EPSILON && t2 <= 1 + EPSILON && t2 < tMin) { 
+                    const iy2 = rectCenterY + t2 * dy; 
+                    if (iy2 >= y - EPSILON && iy2 <= y + height + EPSILON) { tMin = t2; intersection = { x: x + width, y: iy2 };} 
+                } 
+            } 
+            return intersection || { x: rectCenterX, y: rectCenterY };
+        }
+        
+        function getDistancePointToLineSegment(px, py, x1, y1, x2, y2) { 
+            const l2 = (x1 - x2)**2 + (y1 - y2)**2; 
+            if (l2 === 0) return Math.sqrt((px - x1)**2 + (py - y1)**2);
+            let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2; 
+            t = Math.max(0, Math.min(1, t));
+            const closestX = x1 + t * (x2 - x1); 
+            const closestY = y1 + t * (y2 - y1); 
+            return Math.sqrt((px - closestX)**2 + (py - closestY)**2); 
+        }
+
+        function getConnectionAtPos(worldX, worldY) { 
+            for (const conn of connections) { 
+                const fromItem = items.find(item => item.id === conn.fromId); 
+                const toItem = items.find(item => item.id === conn.toId); 
+                if (fromItem && toItem) { 
+                    const startPoint = getIntersectionWithRectBorder(fromItem, toItem); 
+                    const endPoint = getIntersectionWithRectBorder(toItem, fromItem); 
+                    if (startPoint && endPoint) { 
+                        const dist = getDistancePointToLineSegment(worldX, worldY, startPoint.x, startPoint.y, endPoint.x, endPoint.y); 
+                        if (dist < CONNECTION_HIT_THRESHOLD / scale) {
+                            return conn; 
+                        } 
+                    } 
+                } 
+            } 
+            return null; 
+        }
+        
+        function getItemAtPos(worldX, worldY) { 
+            for (let i = items.length - 1; i >= 0; i--) { 
+                const item = items[i]; 
+                if (worldX >= item.x && worldX <= item.x + item.width && 
+                    worldY >= item.y && worldY <= item.y + item.height) { 
+                    return item; 
+                } 
+            } 
+            return null; 
+        }
+
+        function getResizeCorner(worldX, worldY, item) { 
+            if (item.type !== 'image' && item.type !== 'audio' && item.type !== 'video' && item.type !== 'scentCard') {
+                return null;
+            }
+            const handleRadius = RESIZE_HANDLE_SIZE / scale;
+            if (Math.abs(worldX - item.x) < handleRadius && Math.abs(worldY - item.y) < handleRadius) return 'tl'; 
+            if (Math.abs(worldX - (item.x + item.width)) < handleRadius && Math.abs(worldY - item.y) < handleRadius) return 'tr'; 
+            if (Math.abs(worldX - item.x) < handleRadius && Math.abs(worldY - (item.y + item.height)) < handleRadius) return 'bl'; 
+            if (Math.abs(worldX - (item.x + item.width)) < handleRadius && Math.abs(worldY - (item.y + item.height)) < handleRadius) return 'br'; 
+            return null; 
+        }
+        
+        function getResizeCursor(corner) { 
+            switch (corner) { 
+                case 'tl': case 'br': return 'nwse-resize'; 
+                case 'tr': case 'bl': return 'nesw-resize'; 
+                default: return 'default'; 
+            } 
+        }
+        
+        function getDistance(p1, p2) { 
+            return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)); 
+        }
+
+        function showLoading(show) { 
+            loadingSpinner.style.display = show ? 'block' : 'none'; 
+        }
+        
+        function showMessage(message, duration = 3000) { 
+            messageBox.textContent = message; 
+            messageBox.classList.add('show'); 
+            setTimeout(() => { messageBox.classList.remove('show'); }, duration); 
+        }
+
+        function isAnyModalOpen() {
+            const modals = [
+                annotationModal, textNodeModal, connectionStylePickerModal,
+                exportPngModal, helpModal, scentLexiconModal,
+                confirmClearConstellationModal, playbackModal
+            ];
+            return modals.some(modal => modal && (modal.style.display === MODAL_DISPLAY_BLOCK || modal.style.display === MODAL_DISPLAY_FLEX));
+        }
+
+        // --- File & Board Operations ---
+        function handleBgColorChange(e) {
+            canvasBackgroundColor = e.target.value;
+            canvas.style.backgroundColor = canvasBackgroundColor;
+            updateRadialGuideColor();
+            saveState();
+            draw();
+        }
+
+        function handleArrowColorChange(e) { 
+            connectionLineColor = e.target.value; 
+            saveState(); 
+            draw(); 
+        }
+        
+        function toggleConnectMode() { 
+            isConnectingMode = !isConnectingMode; 
+            if (isConnectingMode) { 
+                isDeletingConnectionMode = false;
+                connectionStartItem = null; 
+                showMessage("Connect Mode: Click first item."); 
+                canvas.style.cursor = 'crosshair'; 
+            } else { 
+                connectionStartItem = null;
+                if (connectionStylePickerModal.style.display === 'none') {
+                     canvas.style.cursor = selectedItem ? 'grab' : 'default';
+                }
+                pendingConnectionDetails = null;
+                connectionStylePickerModal.style.display = 'none';
+            } 
+            updateButtonStates(); 
+        }
+
+        function toggleDeleteConnectionMode() { 
+            isDeletingConnectionMode = !isDeletingConnectionMode; 
+            if (isDeletingConnectionMode) { 
+                isConnectingMode = false;
+                connectionStartItem = null; 
+                showMessage("Delete Connection Mode: Click on a connection line."); 
+                canvas.style.cursor = 'not-allowed';
+            } else { 
+                canvas.style.cursor = selectedItem ? 'grab' : 'default'; 
+            } 
+            updateButtonStates(); 
+        }
+        
+        function saveBoardAsJson() { 
+            const boardData = { 
+                items: items.map(item => { 
+                    let savedItem = { ...item };
+                    if (item.type === 'image' && item.img) { 
+                        const { img, ...rest } = item;
+                        savedItem = { ...rest, src: item.src };
+                    }
+                    return savedItem; 
+                }), 
+                connections: connections.map(conn => ({...conn})),
+                transform: { scale: scale, translateX: translateX, translateY: translateY }, 
+                canvasBackgroundColor: canvasBackgroundColor, 
+                connectionLineColor: connectionLineColor, 
+                radialGuideLineColor: radialGuideLineColor, 
+                showRadialGuide: showRadialGuide,
+                radialGuideCoreItemId: radialGuideCoreItemId,
+                version: "1.5.2"
+            }; 
+            const jsonString = JSON.stringify(boardData, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' }); 
+            const url = URL.createObjectURL(blob); 
+            const a = document.createElement('a'); 
+            a.href = url; 
+            a.download = `stellary_board_${Date.now()}.json`;
+            document.body.appendChild(a); 
+            a.click(); 
+            document.body.removeChild(a); 
+            URL.revokeObjectURL(url); 
+            showMessage("Stellary board saved as JSON."); 
+        }
+        
+        async function loadBoardFromJson(e) { 
+            const file = e.target.files[0]; 
+            if (!file) return; 
+            showLoading(true); 
+            const reader = new FileReader(); 
+            reader.onload = async (event) => { 
+                try { 
+                    const boardData = JSON.parse(event.target.result); 
+                    if (!boardData.items || (!boardData.transform && typeof boardData.scale === 'undefined')) {
+                        throw new Error("Invalid JSON format for Stellary board."); 
+                    } 
+                    await loadState(boardData); 
+                    history = []; 
+                    redoStack = []; 
+                    const currentLoadedStateForHistory = { 
+                        items: JSON.parse(JSON.stringify(items.map(item => { 
+                            let itemCopy = { ...item }; 
+                            if (item.type === 'image' && item.img) { 
+                                const { img, ...rest } = itemCopy; 
+                                itemCopy = rest; itemCopy.src = item.img.src; 
+                            } 
+                            return itemCopy; 
+                        }))), 
+                        connections: JSON.parse(JSON.stringify(connections)), 
+                        scale: scale, translateX: translateX, translateY: translateY, 
+                        canvasBackgroundColor: canvasBackgroundColor, 
+                        connectionLineColor: connectionLineColor, 
+                        radialGuideLineColor: radialGuideLineColor, 
+                        showRadialGuide: showRadialGuide, 
+                        radialGuideCoreItemId: radialGuideCoreItemId 
+                    }; 
+                    history.push(currentLoadedStateForHistory); 
+                    updateUndoRedoButtons(); 
+                    showMessage("Stellary board loaded successfully."); 
+                } catch (error) { 
+                    console.error("Error loading JSON:", error); 
+                    showMessage(`Failed to load board: ${error.message}`); 
+                } finally { 
+                    showLoading(false); 
+                    e.target.value = null;
+                } 
+            }; 
+            reader.readAsText(file); 
+        }
+        
+        function loadImagePromise(src) { 
+            return new Promise((resolve, reject) => { 
+                const img = new Image(); 
+                img.crossOrigin = "Anonymous";
+                img.onload = () => resolve(img); 
+                img.onerror = (err) => { 
+                    console.error("loadImagePromise failed for src:", src, err); 
+                    reject(new Error(`Failed to load image: ${src.substring(0, 50)}...`)); 
+                }; 
+                img.src = src; 
+            }); 
+        }
+        
+        function exportBoardAsPng() { 
+            showLoading(true); 
+            try { 
+                const exportCanvas = document.createElement('canvas'); 
+                const exportCtx = exportCanvas.getContext('2d'); 
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity; 
+                if (items.length === 0 && connections.length === 0) { 
+                    exportCanvas.width = canvas.width / scale; 
+                    exportCanvas.height = canvas.height / scale;
+                    minX = 0; minY = 0;
+                } else { 
+                    items.forEach(item => { 
+                        let itemMinX = item.x; 
+                        let itemMinY = item.y; 
+                        let itemMaxX = item.x + item.width; 
+                        let itemMaxY = item.y + item.height; 
+                        if (item.type === 'image' && item.borderWidth && item.borderWidth > 0) { 
+                            itemMinX -= item.borderWidth; itemMinY -= item.borderWidth; 
+                            itemMaxX += item.borderWidth; itemMaxY += item.borderWidth; 
+                        }
+                        if (item.annotation && item.annotation.text) { 
+                            exportCtx.font = `${item.annotation.fontSize}px ${item.annotation.fontFamily || "'Inter', sans-serif"}`;  
+                            const textMargin = 5; 
+                            const lineHeightFactor = 1.2; 
+                            const currentLineHeight = item.annotation.fontSize * lineHeightFactor; 
+                            let currentWrapMaxWidth = item.width; 
+                            const position = (item.type === 'image' && item.annotation.position) ? item.annotation.position : 'bottom';
+                            if (position === 'left' || position === 'right') { 
+                                currentWrapMaxWidth = Math.max(item.width / 1.5, 80); 
+                            } 
+                            const tempLines = wrapText(exportCtx, item.annotation.text, 0, 0, currentWrapMaxWidth, item.annotation.fontSize, false); 
+                            const tempTotalTextHeight = (tempLines.length * currentLineHeight) - (tempLines.length > 0 ? item.annotation.fontSize * (lineHeightFactor-1) : 0); 
+                            const textWidth = tempLines.reduce((max, line) => Math.max(max, exportCtx.measureText(line.text).width), 0); 
+                            if (position === 'top') { itemMinY = Math.min(itemMinY, item.y - textMargin - tempTotalTextHeight); } 
+                            else if (position === 'bottom') { itemMaxY = Math.max(itemMaxY, item.y + item.height + textMargin + tempTotalTextHeight); } 
+                            else if (position === 'left') { itemMinX = Math.min(itemMinX, item.x - textMargin - textWidth); } 
+                            else if (position === 'right') { itemMaxX = Math.max(itemMaxX, item.x + item.width + textMargin + textWidth); } 
+                        }
+                        minX = Math.min(minX, itemMinX); 
+                        minY = Math.min(minY, itemMinY); 
+                        maxX = Math.max(maxX, itemMaxX); 
+                        maxY = Math.max(maxY, itemMaxY); 
+                    }); 
+                    if (minX === Infinity) { minX = 0; minY = 0; maxX = canvas.width / scale; maxY = canvas.height/scale; } 
+                } 
+                const padding = 50; 
+                exportCanvas.width = (maxX - minX) + 2 * padding; 
+                exportCanvas.height = (maxY - minY) + 2 * padding;
+                exportCtx.fillStyle = canvasBackgroundColor; 
+                exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height); 
+                if (items.length > 0 || connections.length > 0) { 
+                    exportCtx.translate(-minX + padding, -minY + padding); 
+                } 
+                exportCtx.strokeStyle = connectionLineColor; 
+                exportCtx.fillStyle = connectionLineColor; 
+                exportCtx.lineWidth = 2; 
+                connections.forEach(conn => { 
+                    const fromItem = items.find(item => item.id === conn.fromId); 
+                    const toItem = items.find(item => item.id === conn.toId);
+                    if (fromItem && toItem) {
+                        const startPoint = getIntersectionWithRectBorder(fromItem, toItem); 
+                        const endPoint = getIntersectionWithRectBorder(toItem, fromItem);
+                        if(startPoint && endPoint) { 
+                            exportCtx.beginPath(); 
+                            exportCtx.moveTo(startPoint.x, startPoint.y); 
+                            exportCtx.lineTo(endPoint.x, endPoint.y);
+                            if (conn.lineStyle === 'dashed') { exportCtx.setLineDash([8, 3]); } 
+                            else if (conn.lineStyle === 'dotted') { exportCtx.setLineDash([2, 2]); } 
+                            else { exportCtx.setLineDash([]); } 
+                            exportCtx.stroke(); 
+                            exportCtx.setLineDash([]); 
+                            drawArrowhead(exportCtx, startPoint.x, startPoint.y, endPoint.x, endPoint.y, 18); 
+                        }
+                    }
+                }); 
+                const sortedItems = [...items].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)); 
+                sortedItems.forEach(item => {
+                    if (item.type === 'image' && item.img && item.img.complete) { 
+                        const originalShadowColor = exportCtx.shadowColor; const originalShadowBlur = exportCtx.shadowBlur; 
+                        if (item.isCoreStar) { exportCtx.shadowColor = 'rgba(255, 215, 0, 0.6)'; exportCtx.shadowBlur = 20; } 
+                        else if (item.isEndNode) { exportCtx.shadowColor = 'rgba(66, 153, 225, 0.7)'; exportCtx.shadowBlur = 20;} 
+                        try { 
+                            exportCtx.drawImage(item.img, item.x, item.y, item.width, item.height); 
+                        } catch (e) { 
+                            console.error("Error drawing image to export canvas (CORS taint?):", item.src, e); 
+                            exportCtx.fillStyle = 'red';
+                            exportCtx.fillRect(item.x, item.y, item.width, item.height);
+                            exportCtx.fillStyle = 'white'; exportCtx.fillText("ERR", item.x + 10, item.y + 20);
+                        }
+                        if (item.isCoreStar || item.isEndNode) { exportCtx.shadowColor = originalShadowColor; exportCtx.shadowBlur = originalShadowBlur; } 
+                        if (item.borderWidth && item.borderWidth > 0) { 
+                            exportCtx.strokeStyle = item.borderColor || '#000000'; 
+                            exportCtx.lineWidth = item.borderWidth; 
+                            exportCtx.strokeRect(item.x, item.y, item.width, item.height); 
+                        } 
+                        if (item.isCoreStar) {
+                            exportCtx.strokeStyle = 'rgba(255, 215, 0, 0.9)'; exportCtx.lineWidth = 3 + (item.borderWidth > 0 ? 1: 0);
+                            exportCtx.strokeRect(item.x - 1, item.y - 1, item.width + 2, item.height + 2);
+                        } else if (item.isEndNode) {
+                            exportCtx.strokeStyle = 'rgba(30, 144, 255, 0.9)'; exportCtx.lineWidth = 3 + (item.borderWidth > 0 ? 1: 0);
+                            exportCtx.strokeRect(item.x - 1, item.y - 1, item.width + 2, item.height + 2);
+                        }
+                    } else if (item.type === 'image' && item.img && !item.img.complete) { 
+                        console.warn("Skipping non-complete image during export:", item.src); 
+                    } else if (item.type === 'audio' || item.type === 'video') {
+                         exportCtx.fillStyle = '#E9EDF0'; exportCtx.strokeStyle = '#B0BFCB'; exportCtx.lineWidth = 1;
+                         exportCtx.beginPath();
+                         if (exportCtx.roundRect) exportCtx.roundRect(item.x, item.y, item.width, item.height, [8]); else exportCtx.rect(item.x, item.y, item.width, item.height);
+                         exportCtx.fill(); exportCtx.stroke();
+                         let targetIcon = item.type === 'audio' ? audioIconImg : videoIconImg;
+                         let iconLoaded = item.type === 'audio' ? audioIconLoaded : videoIconLoaded;
+                         if (iconLoaded && targetIcon.complete && targetIcon.naturalWidth > 0) {
+                            try { /* ... (icon drawing logic from drawMediaPlaceholder using exportCtx) ... */ }
+                            catch(e) { console.error("Error drawing icon to export (CORS?):", e); }
+                         } else { /* ... (text placeholder logic using exportCtx) ... */ }
+                    } else if (item.type === 'textNode') { 
+                        exportCtx.font = `${item.fontSize}px ${item.fontFamily || "'Inter', sans-serif"}`; 
+                        exportCtx.fillStyle = item.backgroundColor || 'rgba(255,255,255,0.7)';
+                        exportCtx.fillRect(item.x, item.y, item.width, item.height);
+                        exportCtx.strokeStyle = '#cccccc'; exportCtx.lineWidth = 1;
+                        exportCtx.strokeRect(item.x, item.y, item.width, item.height);
+                        exportCtx.fillStyle = item.color || '#000000';
+                        exportCtx.textAlign = 'left'; exportCtx.textBaseline = 'top';
+                        wrapText(exportCtx, item.text, item.x + 5, item.y + 5, item.width - 10, item.fontSize, true);
+                        exportCtx.textAlign = 'center'; 
+                    } else if (item.type === 'scentCard') { 
+                        const familyColors = { /* ... */ }; const colors = familyColors[item.scentData.family] || familyColors.default;
+                        exportCtx.fillStyle = colors.bg.replace('0.8', '1');
+                        exportCtx.strokeStyle = colors.border; exportCtx.lineWidth = 1.5;
+                        exportCtx.beginPath();
+                        if (exportCtx.roundRect) exportCtx.roundRect(item.x, item.y, item.width, item.height, [8]); else exportCtx.rect(item.x, item.y, item.width, item.height);
+                        exportCtx.fill(); exportCtx.stroke();
+                    }
+                    if (item.annotation && item.annotation.text) { 
+                        exportCtx.font = `${item.annotation.fontSize}px ${item.annotation.fontFamily || "'Inter', sans-serif"}`; 
+                        exportCtx.fillStyle = item.annotation.color || '#000000'; 
+                    } 
+                }); 
+                try {
+                    const dataUrl = exportCanvas.toDataURL('image/png'); 
+                    if (dataUrl === "data:,") { 
+                        showMessage("Export failed: Could not generate image. This might be due to external icon loading issues (CORS).", 7000); 
+                        showLoading(false); return; 
+                    } 
+                    exportedImage.src = dataUrl; 
+                    exportPngModal.style.display = MODAL_DISPLAY_BLOCK; 
+                } catch (e) { 
+                    console.error("Error calling toDataURL (likely canvas taint from external icons):", e);
+                    showMessage("Export failed: Canvas is tainted, possibly by external icons. Try using local or Base64 encoded icons for reliable export.", 7000);
+                } finally {
+                    showLoading(false); 
+                }
+            } catch (error) { 
+                console.error("Error in exportBoardAsPng:", error); 
+                showMessage("Failed to export board as PNG. Check console for details.", 5000); 
+                showLoading(false); 
+            } 
+        }
+        
+        // --- Modal & UI Interaction ---
+        function executeClearCanvas() {
+            confirmClearConstellationModal.style.display = 'none'; 
+            items = [];
+            connections = [];
+            selectedItem = null;
+            showRadialGuide = false; 
+            radialGuideCoreItemId = null;
+            saveState();
+            draw();
+            updateButtonStates();
+            showMessage("Canvas cleared.");
+        }
+
+        function openHelpModal() { 
+            populateHelpContent(); 
+            helpModal.style.display = MODAL_DISPLAY_FLEX; 
+        }
+        function closeHelpModal() { 
+            helpModal.style.display = 'none'; 
+        }
+        function populateHelpContent() {
+            helpContent.innerHTML = `
+                <p class="mb-2"><strong>Stellary:</strong> A sensory-based mapping practice for how we perceive and remember. It's a poetic, tactile, and deeply personal method of reflection.</p>
+                <h4 class="text-lg font-semibold mt-3 mb-1">Core Idea:</h4>
+                <p class="mb-2">Imagine an "inner emotional galaxy." Each constellation begins with a felt sense or insight — a "star" of awareness — around which fragments of experience orbit: photographs, textures, snippets of conversation, ambient sounds, written lines, voice notes, or found objects. This method honors resonance over sequence and meaning over structure.</p>
+                <h4 class="text-lg font-semibold mt-3 mb-1">Purpose:</h4>
+                <ul class="list-disc list-inside mb-2 space-y-1">
+                    <li>To pause and reflect.</li>
+                    <li>To archive moments of deep emotional texture.</li>
+                    <li>To make sense of a transition, loss, or breakthrough.</li>
+                    <li>For "feeling before knowing."</li>
+                    <li>It’s about presence, not productivity.</li>
+                </ul>
+                <h4 class="text-lg font-semibold mt-3 mb-1">Structure of a Stellary:</h4>
+                <ul class="list-disc list-inside mb-2 space-y-1">
+                    <li><strong>CORE:</strong> The central emotion, moment, or insight. Mark an image as a "Core Star" using the <i class="fas fa-star text-yellow-400"></i> button.</li>
+                    <li><strong>SENSORY OBJECTS:</strong> Visual (<i class="fas fa-image"></i>), auditory (<i class="fas fa-music"></i>), video (<i class="fas fa-film"></i>), written fragments (<i class="fas fa-font"></i>), or Scent Evocations (<i class="fas fa-spray-can"></i>) orbiting the core.</li>
+                    <li><strong>END NODE:</strong> A reflective close or destination. Mark an image as an "End Node" using the <i class="fas fa-flag-checkered text-blue-500"></i> button.</li>
+                </ul>
+                <p class="mb-2"><strong>Arrangement:</strong> Layout is meaning. A <strong>Radial Guide</strong> (<i class="fas fa-bullseye"></i>) can be toggled for a Core Star to assist with spatial arrangement.</p>
+                
+                <h4 class="text-lg font-semibold mt-3 mb-1">How to Use This App:</h4>
+                <ul class="list-disc list-inside mb-2 space-y-1">
+                    <li><strong>Add Content:</strong> Use the toolbar buttons or keyboard shortcuts to add your sensory items. (Media files are limited to ${MAX_FILE_SIZE / (1024*1024)}MB each).</li>
+                    <li><strong>Interact:</strong> Single-click/tap to select. Double-click/tap media to play. Drag to move. Resize items with corner handles.</li>
+                    <li><strong>Style & Annotate:</strong> Select an item and click <i class="fas fa-comment-dots"></i> (or press 'A') to add text and change styles.</li>
+                    <li><strong>Connect:</strong> Use the <i class="fas fa-link"></i> button (or press 'C') to draw connections.</li>
+                    <li><strong>Save & Export:</strong> Save your work (<i class="fas fa-download"></i>) and load it (<i class="fas fa-upload"></i>) later. Export a final image via the PNG (<i class="fas fa-file-export"></i>) button.</li>
+                </ul>
+
+                <h4 class="text-lg font-semibold mt-3 mb-1">When to Use Stellary:</h4>
+                <ul class="list-disc list-inside mb-2 space-y-1">
+                    <li>After a significant experience or emotional event.</li>
+                    <li>During seasonal or life shifts.</li>
+                    <li>When words don't fully capture your feelings.</li>
+                </ul>
+                <p class="mt-3 italic">"This is not a map to follow. It's a map to remember with."</p>
+
+                <div class="mt-4 pt-3 border-t">
+                    <h4 class="text-lg font-semibold mt-1 mb-2">Keyboard Shortcuts</h4>
+                    <ul class="list-disc list-inside mb-2 space-y-1">
+                        <li><strong class="w-28 inline-block">I</strong> Add Image</li>
+                        <li><strong class="w-28 inline-block">T</strong> Add Text Snippet</li>
+                        <li><strong class="w-28 inline-block">C</strong> Toggle Connect Mode</li>
+                        <li><strong class="w-28 inline-block">A</strong> Annotate/Style Selected Item</li>
+                        <li><strong class="w-28 inline-block">Arrow Keys</strong> Nudge Selected Item</li>
+                        <li><strong class="w-28 inline-block">Delete/Backspace</strong> Delete Selected Item</li>
+                        <li><strong class="w-28 inline-block">Ctrl/Cmd + Z</strong> Undo</li>
+                        <li><strong class="w-28 inline-block">Ctrl/Cmd + Y</strong> Redo</li>
+                        <li><strong class="w-28 inline-block">Ctrl/Cmd + S</strong> Save to Device</li>
+                        <li><strong class="w-28 inline-block">Ctrl/Cmd + O</strong> Load from Device</li>
+                        <li><strong class="w-28 inline-block">+/-</strong> Zoom In/Out</li>
+                        <li><strong class="w-28 inline-block">0</strong> Reset View</li>
+                        <li><strong class="w-28 inline-block">Esc</strong> Close modals or deselect item</li>
+                    </ul>
+                </div>
+
+                <div class="mt-4 pt-3 border-t">
+                    <h4 class="text-lg font-semibold mt-1 mb-2">Full Documentation</h4>
+                    <p class="mb-2">For a more detailed guide, please see the full documentation: <a href="https://drive.google.com/file/d/1jpfKoDA2NHBG5C-1MvzUU9BEnMGjW6FW/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">View Documentation</a>.</p>
+                </div>
+
+                <div class="mt-4 pt-3 border-t">
+                    <h4 class="text-lg font-semibold mt-1 mb-2">License & Support</h4>
+                    <p class="mb-2">Personal use of Stellary is free. If you find it valuable, please consider making a small donation to support development. Your support is greatly appreciated! <a href="https://ko-fi.com/thorstenbecker" target="_blank" rel="noopener noreferrer" class="text-pink-500 hover:underline font-semibold">Donate here</a>.</p>
+                    <p class="mb-2">Any other use (commercial, institutional, educational, etc.) requires a license. Please contact me at <a href="mailto:hello@thorstenbecker.de" class="text-blue-500 hover:underline">hello@thorstenbecker.de</a> for inquiries.</p>
+                </div>
+            `;
+        }
+        
+        function openPlaybackModal(item) {
+            if (!item || (item.type !== 'audio' && item.type !== 'video')) return;
+            playbackContainer.innerHTML = '';
+            let mediaElement;
+            if (item.type === 'audio') {
+                mediaElement = document.createElement('audio');
+            } else {
+                mediaElement = document.createElement('video');
+            }
+            mediaElement.controls = true;
+            mediaElement.autoplay = true;
+            mediaElement.src = item.src;
+            playbackContainer.appendChild(mediaElement);
+            playbackModal.style.display = MODAL_DISPLAY_BLOCK;
+        }
+
+        function closePlaybackModal() {
+            playbackContainer.innerHTML = '';
+            playbackModal.style.display = 'none';
+        }
+
+        // --- Keyboard Shortcuts & Window Events ---
+        function handleKeyDown(e) { 
+            const activeElement = document.activeElement; 
+            const isInputFocused = activeElement && 
+                                 (activeElement.tagName === 'INPUT' || 
+                                  activeElement.tagName === 'TEXTAREA' || 
+                                  activeElement.isContentEditable || 
+                                  activeElement.tagName === 'SELECT'); 
+            if (e.key === 'Escape') {
+                if (playbackModal.style.display === MODAL_DISPLAY_BLOCK) { closePlaybackModal(); e.preventDefault(); return; }
+                if (annotationModal.style.display === MODAL_DISPLAY_BLOCK) { closeAnnotationModal(); e.preventDefault(); return; }
+                if (textNodeModal.style.display === MODAL_DISPLAY_BLOCK) { closeTextNodeModal(); e.preventDefault(); return; }
+                if (connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) { cancelConnectionStyleChoice(); e.preventDefault(); return; }
+                if (exportPngModal.style.display === MODAL_DISPLAY_BLOCK) { closeExportModalBtn.click(); e.preventDefault(); return; }
+                if (helpModal.style.display === MODAL_DISPLAY_FLEX) { closeHelpModal(); e.preventDefault(); return; }
+                if (scentLexiconModal.style.display === MODAL_DISPLAY_BLOCK) { scentLexiconModal.style.display = 'none'; e.preventDefault(); return; } 
+                if (confirmClearConstellationModal.style.display === MODAL_DISPLAY_BLOCK) { confirmClearConstellationModal.style.display = 'none'; e.preventDefault(); return; }
+            }
+            if (isInputFocused) {
+                if (e.key === 'Escape') {
+                    activeElement.blur();
+                } else if (!((e.ctrlKey || e.metaKey) && ['z', 'y', 's', 'o'].includes(e.key.toLowerCase()))) {
+                    return;
+                }
+            }
+            let actionPerformed = false; 
+            const key = e.key.toLowerCase(); 
+            if ((key === 'delete' || key === 'backspace') && selectedItem) { 
+                deleteSelectedItem(); actionPerformed = true; 
+            } else if ((e.ctrlKey || e.metaKey) && key === 'z') { 
+                undo(); actionPerformed = true; 
+            } else if ((e.ctrlKey || e.metaKey) && (key === 'y' || (e.shiftKey && key === 'z'))) {
+                redo(); actionPerformed = true; 
+            } else if ((e.ctrlKey || e.metaKey) && key === 's') { 
+                saveBoardAsJson(); actionPerformed = true; 
+            } else if ((e.ctrlKey || e.metaKey) && key === 'o') { 
+                loadFromDeviceBtn.click(); actionPerformed = true; 
+            } else if (key === 'i') {
+                addImageBtn.click(); actionPerformed = true;
+            } else if (key === 't') {
+                addTextNodeBtn.click(); actionPerformed = true;
+            } else if (key === 'c') {
+                toggleConnectMode(); actionPerformed = true;
+            } else if (key === 'a' && selectedItem) {
+                openAnnotationModal(); actionPerformed = true;
+            } else if (key.startsWith('arrow') && selectedItem) {
+                let dx = 0, dy = 0;
+                if (key === 'arrowleft') dx = -NUDGE_AMOUNT;
+                if (key === 'arrowright') dx = NUDGE_AMOUNT;
+                if (key === 'arrowup') dy = -NUDGE_AMOUNT;
+                if (key === 'arrowdown') dy = NUDGE_AMOUNT;
+                selectedItem.x += dx;
+                selectedItem.y += dy;
+                saveState();
+                draw();
+                actionPerformed = true;
+            } else if (key === '+' || key === '=') { 
+                zoomCanvas(1.2); saveState(); actionPerformed = true; 
+            } else if (key === '-') {
+                zoomCanvas(0.8); saveState(); actionPerformed = true; 
+            } else if (key === '0') {
+                resetView(); actionPerformed = true; 
+            } else if (key === 'escape') {
+                if (isConnectingMode) { toggleConnectMode(); actionPerformed = true; } 
+                else if (isDeletingConnectionMode) { toggleDeleteConnectionMode(); actionPerformed = true; } 
+                else if (selectedItem) { 
+                    selectedItem = null; 
+                    draw(); updateButtonStates(); actionPerformed = true; 
+                } 
+            } 
+            if (actionPerformed) { 
+                e.preventDefault(); 
+            } 
+        }
+
+        function handleBeforeUnload(e) { 
+            if (history.length > 1) { 
+                e.preventDefault(); 
+                e.returnValue = ''; 
+                return '';
+            } 
+        }
+
+        // --- Scent Card Functions ---
+        function openScentModal() {
+            scentLexiconModal.style.display = MODAL_DISPLAY_BLOCK;
+            populateScentFilter();
+            populateScentLexicon();
+            scentSearchInput.value = '';
+            scentSearchInput.focus();
+        }
+
+        function populateScentFilter() {
+            if (scentFilterSelect.options.length > 1 && scentFilterSelect.options[0].value === 'all') return; 
+            scentFilterSelect.innerHTML = '<option value="all">All Categories</option>';
+            Object.keys(SCENT_LEXICON).forEach(family => {
+                const option = document.createElement('option');
+                option.value = family;
+                option.textContent = family;
+                scentFilterSelect.appendChild(option);
+            });
+        }
+
+        function populateScentLexicon() {
+            scentLexiconResults.innerHTML = '';
+            const searchTerm = scentSearchInput.value.toLowerCase();
+            const selectedFamily = scentFilterSelect.value;
+            const familyColors = {
+                "Floral": { bg: 'bg-pink-100', text: 'text-pink-800', border: 'border-pink-300' },
+                "Woody": { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-300' }, 
+                "Fresh": { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-300' },
+                "Warm / Spiced": { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-300' },
+                "Atmospheric & Elemental": { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300' },
+                "default": { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-300' }
+            };
+            for (const family in SCENT_LEXICON) {
+                if (selectedFamily !== 'all' && selectedFamily !== family) continue;
+                SCENT_LEXICON[family].forEach(scent => {
+                    if (scent.term.toLowerCase().includes(searchTerm) || scent.desc.toLowerCase().includes(searchTerm)) {
+                        const card = document.createElement('div');
+                        const currentFamilyColors = familyColors[family] || familyColors.default;
+                        card.className = `scent-card ${currentFamilyColors.border}`; 
+                        card.innerHTML = `
+                            <div class="scent-term">${scent.term}</div>
+                            <div class="scent-desc">${scent.desc}</div>
+                            <div class="scent-family ${currentFamilyColors.bg} ${currentFamilyColors.text}">${family}</div>
+                        `;
+                        card.onclick = () => addScentCardToCanvas(scent, family);
+                        scentLexiconResults.appendChild(card);
+                    }
+                });
+            }
+        }
+
+        function addScentCardToCanvas(scent, family) {
+            const newItem = {
+                type: 'scentCard',
+                id: generateUniqueId('scent'),
+                x: (canvas.width / 2 - DEFAULT_SCENT_CARD_WIDTH / 2 - translateX) / scale,
+                y: (canvas.height / 2 - DEFAULT_SCENT_CARD_HEIGHT / 2 - translateY) / scale,
+                width: DEFAULT_SCENT_CARD_WIDTH,
+                height: DEFAULT_SCENT_CARD_HEIGHT,
+                scentData: { 
+                    term: scent.term,
+                    desc: scent.desc,
+                    family: family
+                },
+                zIndex: items.length,
+                createdAt: new Date().toISOString()
+            };
+            items.push(newItem);
+            selectedItem = newItem;
+            scentLexiconModal.style.display = 'none';
+            showMessage(`Scent card '${scent.term}' added.`);
+            saveState();
+            draw();
+            updateButtonStates();
+        }
+
+        // --- Start the app ---
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
