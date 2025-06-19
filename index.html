@@ -2057,72 +2057,73 @@
         function handleCropMouseUp(e) {
             isDrawingCropRect = false;
         }
-        
-        function handleCropConfirm() {
-            if (!croppingItem || cropRect.w === 0 || cropRect.h === 0) {
-                showMessage("No crop area selected.", 2000);
-                return;
-            }
+		function handleCropConfirm() {
+			// 1. Validate that a crop selection has been made
+			if (!croppingItem || Math.abs(cropRect.w) < 1 || Math.abs(cropRect.h) < 1) {
+				showMessage("No valid crop area selected.", 2000);
+				return;
+			}
 
-            // Normalize the rectangle to handle drawing in any direction
-            const finalCropRect = {
-                x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
-                y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
-                width: Math.abs(cropRect.w),
-                height: Math.abs(cropRect.h)
-            };
+			// 2. Normalize the rectangle to handle drawing in any direction
+			const finalCropRect = {
+				x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
+				y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
+				width: Math.abs(cropRect.w),
+				height: Math.abs(cropRect.h)
+			};
 
-            // Convert coordinates from the displayed canvas back to original image dimensions
-            const sourceX = finalCropRect.x / cropCanvasScale;
-            const sourceY = finalCropRect.y / cropCanvasScale;
-            const sourceWidth = finalCropRect.width / cropCanvasScale;
-            const sourceHeight = finalCropRect.height / cropCanvasScale;
-            
-            // Create a new canvas to draw the cropped image
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = sourceWidth;
-            tempCanvas.height = sourceHeight;
-            const tempCtx = tempCanvas.getContext('2d');
+			// 3. Convert the preview crop coordinates back to the original image's coordinate space
+			const sourceX = finalCropRect.x / cropCanvasScale;
+			const sourceY = finalCropRect.y / cropCanvasScale;
+			const sourceWidth = finalCropRect.width / cropCanvasScale;
+			const sourceHeight = finalCropRect.height / cropCanvasScale;
+			
+			// 4. Create a temporary canvas and draw ONLY the selected portion of the original image onto it
+			const tempCanvas = document.createElement('canvas');
+			tempCanvas.width = sourceWidth;
+			tempCanvas.height = sourceHeight;
+			const tempCtx = tempCanvas.getContext('2d');
+			tempCtx.drawImage(
+				croppingItem.img, // The original image
+				sourceX, sourceY, sourceWidth, sourceHeight, // The precise area to CUT from the original
+				0, 0, sourceWidth, sourceHeight             // Draw that cut piece onto the new canvas
+			);
 
-            // Draw the cropped portion of the original image
-            tempCtx.drawImage(
-                croppingItem.img,
-                sourceX, sourceY, sourceWidth, sourceHeight, // source rect
-                0, 0, sourceWidth, sourceHeight             // destination rect
-            );
+			// 5. Get the new, genuinely cropped image as a Data URL
+			const newDataUrl = tempCanvas.toDataURL();
+			
+			// 6. Create a new Image object from the cropped data.
+			// Data URLs load synchronously, so we can proceed without an onload handler.
+			const newImg = new Image();
+			newImg.src = newDataUrl;
 
-            // Get the new image as a Data URL
-            const newDataUrl = tempCanvas.toDataURL();
-            
-            // Update the item on the main canvas
-            const originalAspectRatio = croppingItem.width / croppingItem.height;
-            const newAspectRatio = sourceWidth / sourceHeight;
-            
-            croppingItem.src = newDataUrl;
-            croppingItem.originalWidth = sourceWidth;
-            croppingItem.originalHeight = sourceHeight;
-            
-            // Adjust width/height on canvas to maintain rough size
-            if (newAspectRatio > originalAspectRatio) {
-                croppingItem.height = croppingItem.width / newAspectRatio;
-            } else {
-                croppingItem.width = croppingItem.height * newAspectRatio;
-            }
+			// 7. Calculate the new dimensions for the item on the main canvas, preserving its area.
+			const oldArea = croppingItem.width * croppingItem.height;
+			const newAspectRatio = sourceWidth / sourceHeight;
+			const newCanvasHeight = Math.sqrt(oldArea / newAspectRatio);
+			const newCanvasWidth = oldArea / newCanvasHeight;
+			
+			// 8. Before updating the item, store its old dimensions for centering.
+			const oldCanvasWidth = croppingItem.width;
+			const oldCanvasHeight = croppingItem.height;
 
-            // Re-create the image object
-            const newImg = new Image();
-            newImg.onload = () => {
-                croppingItem.img = newImg;
-                saveState();
-                draw();
-                showMessage("Image cropped successfully.");
-            };
-            newImg.src = newDataUrl;
+			// 9. Update ALL of the item's properties in one go.
+			croppingItem.img = newImg; // *** THIS IS THE KEY: Replace the image object itself ***
+			croppingItem.src = newDataUrl;
+			croppingItem.originalWidth = sourceWidth;
+			croppingItem.originalHeight = sourceHeight;
+			croppingItem.width = newCanvasWidth;
+			croppingItem.height = newCanvasHeight;
+			// Adjust position to keep the item centered on its old position
+			croppingItem.x = croppingItem.x + (oldCanvasWidth - newCanvasWidth) / 2;
+			croppingItem.y = croppingItem.y + (oldCanvasHeight - newCanvasHeight) / 2;
 
-            closeCropModal();
-        }
-
-        // --- Annotation & Styling ---
+			// 10. Save state, redraw the main canvas, and close the modal.
+			saveState();
+			draw();
+			showMessage("Image cropped successfully.");
+			closeCropModal();
+		}        // --- Annotation & Styling ---
         function openAnnotationModal() { 
             if (!selectedItem) return;
             if (selectedItem.type === 'textNode') {
