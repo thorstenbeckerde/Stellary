@@ -45,7 +45,7 @@
             margin: 0;
             display: flex;
             flex-direction: column;
-            height: 100vh;
+            height: 100dvh;
             background-color: var(--page-bg);
             transition: background-color 0.3s ease-in-out;
         }
@@ -183,6 +183,12 @@
             outline: none;
         }
         
+        #cropCanvasWrapper canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
         /* Modal Styles */
         .modal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -284,7 +290,9 @@
                 <button id="deleteConnectionBtn" title="Delete Connection" class="control-button"><i class="fas fa-unlink"></i></button>
             </div>
 
-            <div class="tool-group flex-wrap" id="selected-item-actions"> <button id="styleOrAnnotateBtn" title="Annotate / Style Item (A)" class="control-button disabled"><i class="fas fa-comment-dots"></i></button>
+            <div class="tool-group flex-wrap" id="selected-item-actions">
+                 <button id="styleOrAnnotateBtn" title="Annotate / Style Item (A)" class="control-button disabled"><i class="fas fa-comment-dots"></i></button>
+                 <button id="cropImageBtn" title="Crop Image" class="control-button disabled"><i class="fas fa-crop-alt"></i></button>
                  <button id="deleteItemBtn" title="Delete Selected Item (Del/Backspace)" class="control-button disabled"><i class="fas fa-trash-alt"></i></button>
                  <div class="tool-group-separator hidden sm:block"></div>
                  <button id="bringToFrontBtn" title="Bring to Front" class="control-button disabled"><i class="fas fa-arrow-up"></i></button>
@@ -327,6 +335,17 @@
         </div>
     </div>
     
+    <div id="cropModal" class="modal" style="width: 80vw; max-width: 800px;">
+        <h3 class="text-xl font-semibold mb-3">Crop Image</h3>
+        <div id="cropCanvasWrapper" style="position: relative; width: 100%; height: 50vh; background-color: #e0e0e0; margin-bottom: 1rem; cursor: crosshair;">
+            <canvas id="cropCanvas"></canvas>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+            <button id="cancelCropBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded">Cancel</button>
+            <button id="confirmCropBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Apply Crop</button>
+        </div>
+    </div>
+
     <div id="playbackModal" class="modal">
         <h3 id="playbackModalTitle" class="text-lg font-semibold mb-3">Media Playback</h3>
         <div id="playbackContainer"></div>
@@ -749,6 +768,7 @@
         const addAudioBtn = document.getElementById('addAudioBtn');
         const addVideoBtn = document.getElementById('addVideoBtn');
         const styleOrAnnotateBtn = document.getElementById('styleOrAnnotateBtn');
+        const cropImageBtn = document.getElementById('cropImageBtn');
         const connectImagesBtn = document.getElementById('connectImagesBtn'); 
         const deleteConnectionBtn = document.getElementById('deleteConnectionBtn'); 
         const zoomInBtn = document.getElementById('zoomInBtn'); 
@@ -822,6 +842,11 @@
         const closeDonateModalBtn = document.getElementById('closeDonateModalBtn');
         const themeBtn = document.getElementById('themeBtn');
         const themeDropdown = document.getElementById('themeDropdown');
+        const cropModal = document.getElementById('cropModal');
+        const cropCanvas = document.getElementById('cropCanvas');
+        const cropCanvasWrapper = document.getElementById('cropCanvasWrapper');
+        const cancelCropBtn = document.getElementById('cancelCropBtn');
+        const confirmCropBtn = document.getElementById('confirmCropBtn');
 
         // Preload Icon Images
         const audioIconImg = new Image();
@@ -862,6 +887,11 @@
         let editingTextNode = null; 
         let pendingConnectionDetails = null;
         let currentTheme = 'Default';
+        let isCroppingMode = false;
+        let croppingItem = null;
+        let cropRect = { startX: 0, startY: 0, w: 0, h: 0 };
+        let isDrawingCropRect = false;
+        let cropCanvasScale = 1;
         
         // --- Initialization ---
         function init() {
@@ -898,6 +928,12 @@
             loadFromDeviceInput.addEventListener('change', loadBoardFromJson); 
             saveToDeviceBtn.addEventListener('click', saveBoardAsJson); 
             styleOrAnnotateBtn.addEventListener('click', openAnnotationModal);
+            cropImageBtn.addEventListener('click', openCropModal);
+            cancelCropBtn.addEventListener('click', closeCropModal);
+            confirmCropBtn.addEventListener('click', handleCropConfirm);
+            cropCanvas.addEventListener('mousedown', handleCropMouseDown);
+            cropCanvas.addEventListener('mousemove', handleCropMouseMove);
+            cropCanvas.addEventListener('mouseup', handleCropMouseUp);
             connectImagesBtn.addEventListener('click', toggleConnectMode); 
             deleteConnectionBtn.addEventListener('click', toggleDeleteConnectionMode); 
             coreStarBtn.addEventListener('click', toggleCoreStar); 
@@ -1932,6 +1968,160 @@
             draw(); 
         }
 
+        // --- Image Cropping ---
+		function openCropModal() {
+			if (!selectedItem || selectedItem.type !== 'image') return;
+			croppingItem = selectedItem;
+			isCroppingMode = true;
+
+			// --- FIX: Make the modal visible FIRST to get correct dimensions ---
+			cropModal.style.display = MODAL_DISPLAY_BLOCK;
+
+			const cropCtx = cropCanvas.getContext('2d');
+			const img = croppingItem.img;
+
+			// Add a check to ensure the image is valid and loaded
+			if (!img || !img.complete || img.naturalWidth === 0) {
+				console.error("Image to crop is not ready or invalid.", img);
+				showMessage("Cannot crop: Image data is not available.", 3000);
+				closeCropModal();
+				return;
+			}
+
+			// Now that the modal is visible, we can get the correct dimensions
+			const wrapperW = cropCanvasWrapper.clientWidth;
+			const wrapperH = cropCanvasWrapper.clientHeight;
+			const imgAspectRatio = img.naturalWidth / img.naturalHeight;
+
+			let canvasW, canvasH;
+			if ((wrapperW / wrapperH) > imgAspectRatio) {
+				canvasH = wrapperH;
+				canvasW = wrapperH * imgAspectRatio;
+			} else {
+				canvasW = wrapperW;
+				canvasH = wrapperW / imgAspectRatio;
+			}
+
+			cropCanvas.width = canvasW;
+			cropCanvas.height = canvasH;
+			cropCanvas.style.left = `${(wrapperW - canvasW) / 2}px`;
+			cropCanvas.style.top = `${(wrapperH - canvasH) / 2}px`;
+			
+			cropCanvasScale = canvasW / img.naturalWidth;
+
+			cropCtx.drawImage(img, 0, 0, canvasW, canvasH);
+			// The modal is already visible, so the final display line is no longer needed here.
+		}
+
+        function closeCropModal() {
+            isCroppingMode = false;
+            croppingItem = null;
+            isDrawingCropRect = false;
+            cropRect = { startX: 0, startY: 0, w: 0, h: 0 };
+            cropModal.style.display = 'none';
+            const cropCtx = cropCanvas.getContext('2d');
+            cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+        }
+
+        function handleCropMouseDown(e) {
+            if (!isCroppingMode) return;
+            isDrawingCropRect = true;
+            const rect = cropCanvas.getBoundingClientRect();
+            cropRect.startX = e.clientX - rect.left;
+            cropRect.startY = e.clientY - rect.top;
+            cropRect.w = 0;
+            cropRect.h = 0;
+        }
+
+        function handleCropMouseMove(e) {
+            if (!isDrawingCropRect) return;
+            const rect = cropCanvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+
+            cropRect.w = currentX - cropRect.startX;
+            cropRect.h = currentY - cropRect.startY;
+
+            const cropCtx = cropCanvas.getContext('2d');
+            cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+            cropCtx.drawImage(croppingItem.img, 0, 0, cropCanvas.width, cropCanvas.height);
+
+            // Draw selection rectangle
+            cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            cropCtx.lineWidth = 2;
+            cropCtx.setLineDash([5, 3]);
+            cropCtx.strokeRect(cropRect.startX, cropRect.startY, cropRect.w, cropRect.h);
+            cropCtx.setLineDash([]);
+        }
+
+        function handleCropMouseUp(e) {
+            isDrawingCropRect = false;
+        }
+        
+        function handleCropConfirm() {
+            if (!croppingItem || cropRect.w === 0 || cropRect.h === 0) {
+                showMessage("No crop area selected.", 2000);
+                return;
+            }
+
+            // Normalize the rectangle to handle drawing in any direction
+            const finalCropRect = {
+                x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
+                y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
+                width: Math.abs(cropRect.w),
+                height: Math.abs(cropRect.h)
+            };
+
+            // Convert coordinates from the displayed canvas back to original image dimensions
+            const sourceX = finalCropRect.x / cropCanvasScale;
+            const sourceY = finalCropRect.y / cropCanvasScale;
+            const sourceWidth = finalCropRect.width / cropCanvasScale;
+            const sourceHeight = finalCropRect.height / cropCanvasScale;
+            
+            // Create a new canvas to draw the cropped image
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = sourceWidth;
+            tempCanvas.height = sourceHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // Draw the cropped portion of the original image
+            tempCtx.drawImage(
+                croppingItem.img,
+                sourceX, sourceY, sourceWidth, sourceHeight, // source rect
+                0, 0, sourceWidth, sourceHeight             // destination rect
+            );
+
+            // Get the new image as a Data URL
+            const newDataUrl = tempCanvas.toDataURL();
+            
+            // Update the item on the main canvas
+            const originalAspectRatio = croppingItem.width / croppingItem.height;
+            const newAspectRatio = sourceWidth / sourceHeight;
+            
+            croppingItem.src = newDataUrl;
+            croppingItem.originalWidth = sourceWidth;
+            croppingItem.originalHeight = sourceHeight;
+            
+            // Adjust width/height on canvas to maintain rough size
+            if (newAspectRatio > originalAspectRatio) {
+                croppingItem.height = croppingItem.width / newAspectRatio;
+            } else {
+                croppingItem.width = croppingItem.height * newAspectRatio;
+            }
+
+            // Re-create the image object
+            const newImg = new Image();
+            newImg.onload = () => {
+                croppingItem.img = newImg;
+                saveState();
+                draw();
+                showMessage("Image cropped successfully.");
+            };
+            newImg.src = newDataUrl;
+
+            closeCropModal();
+        }
+
         // --- Annotation & Styling ---
         function openAnnotationModal() { 
             if (!selectedItem) return;
@@ -2153,6 +2343,8 @@
             const isTextNodeSelected = selectedItem && selectedItem.type === 'textNode';
             styleOrAnnotateBtn.disabled = !isItemSelected || isScentCardSelected;
             styleOrAnnotateBtn.classList.toggle('disabled', styleOrAnnotateBtn.disabled);
+            cropImageBtn.classList.toggle('disabled', !isImageSelected);
+            cropImageBtn.disabled = !isImageSelected;
             if(isScentCardSelected) {
                styleOrAnnotateBtn.title = "Scent cards cannot be styled further.";
             } else if (isTextNodeSelected) {
@@ -2456,7 +2648,7 @@
             const modals = [
                 annotationModal, textNodeModal, connectionStylePickerModal,
                 exportPngModal, helpModal, scentLexiconModal,
-                confirmClearConstellationModal, playbackModal, donateModal
+                confirmClearConstellationModal, playbackModal, donateModal, cropModal
             ];
             return modals.some(modal => modal && (modal.style.display === MODAL_DISPLAY_BLOCK || modal.style.display === MODAL_DISPLAY_FLEX));
         }
@@ -2964,6 +3156,7 @@
                                   activeElement.isContentEditable || 
                                   activeElement.tagName === 'SELECT'); 
             if (e.key === 'Escape') {
+                if (cropModal.style.display === MODAL_DISPLAY_BLOCK) { closeCropModal(); e.preventDefault(); return; }
                 if (playbackModal.style.display === MODAL_DISPLAY_BLOCK) { closePlaybackModal(); e.preventDefault(); return; }
                 if (annotationModal.style.display === MODAL_DISPLAY_BLOCK) { closeAnnotationModal(); e.preventDefault(); return; }
                 if (textNodeModal.style.display === MODAL_DISPLAY_BLOCK) { closeTextNodeModal(); e.preventDefault(); return; }
