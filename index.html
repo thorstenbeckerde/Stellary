@@ -934,6 +934,15 @@
             cropCanvas.addEventListener('mousedown', handleCropMouseDown);
             cropCanvas.addEventListener('mousemove', handleCropMouseMove);
             cropCanvas.addEventListener('mouseup', handleCropMouseUp);
+			//...
+			cropCanvas.addEventListener('mousedown', handleCropMouseDown);
+			cropCanvas.addEventListener('mousemove', handleCropMouseMove);
+			cropCanvas.addEventListener('mouseup', handleCropMouseUp);
+			cropCanvas.addEventListener('touchstart', handleCropTouchStart, { passive: false });
+			cropCanvas.addEventListener('touchmove', handleCropTouchMove, { passive: false });
+			cropCanvas.addEventListener('touchend', handleCropTouchEnd);
+			connectImagesBtn.addEventListener('click', toggleConnectMode); 
+			//...
             connectImagesBtn.addEventListener('click', toggleConnectMode); 
             deleteConnectionBtn.addEventListener('click', toggleDeleteConnectionMode); 
             coreStarBtn.addEventListener('click', toggleCoreStar); 
@@ -2057,73 +2066,124 @@
         function handleCropMouseUp(e) {
             isDrawingCropRect = false;
         }
-		function handleCropConfirm() {
-			// 1. Validate that a crop selection has been made
-			if (!croppingItem || Math.abs(cropRect.w) < 1 || Math.abs(cropRect.h) < 1) {
-				showMessage("No valid crop area selected.", 2000);
-				return;
-			}
+		function handleCropTouchStart(e) {
+			e.preventDefault(); // This is crucial to stop the page from scrolling
+			isDrawingCropRect = true;
+			const rect = cropCanvas.getBoundingClientRect();
+			const touch = e.touches[0];
+			cropRect.startX = touch.clientX - rect.left;
+			cropRect.startY = touch.clientY - rect.top;
+			cropRect.w = 0;
+			cropRect.h = 0;
+		}
 
-			// 2. Normalize the rectangle to handle drawing in any direction
-			const finalCropRect = {
-				x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
-				y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
-				width: Math.abs(cropRect.w),
-				height: Math.abs(cropRect.h)
-			};
-
-			// 3. Convert the preview crop coordinates back to the original image's coordinate space
-			const sourceX = finalCropRect.x / cropCanvasScale;
-			const sourceY = finalCropRect.y / cropCanvasScale;
-			const sourceWidth = finalCropRect.width / cropCanvasScale;
-			const sourceHeight = finalCropRect.height / cropCanvasScale;
+		function handleCropTouchMove(e) {
+			e.preventDefault(); // Also crucial to allow drawing instead of scrolling
+			if (!isDrawingCropRect) return;
 			
-			// 4. Create a temporary canvas and draw ONLY the selected portion of the original image onto it
-			const tempCanvas = document.createElement('canvas');
-			tempCanvas.width = sourceWidth;
-			tempCanvas.height = sourceHeight;
-			const tempCtx = tempCanvas.getContext('2d');
-			tempCtx.drawImage(
-				croppingItem.img, // The original image
-				sourceX, sourceY, sourceWidth, sourceHeight, // The precise area to CUT from the original
-				0, 0, sourceWidth, sourceHeight             // Draw that cut piece onto the new canvas
-			);
+			const rect = cropCanvas.getBoundingClientRect();
+			const touch = e.touches[0];
+			const currentX = touch.clientX - rect.left;
+			const currentY = touch.clientY - rect.top;
 
-			// 5. Get the new, genuinely cropped image as a Data URL
-			const newDataUrl = tempCanvas.toDataURL();
-			
-			// 6. Create a new Image object from the cropped data.
-			// Data URLs load synchronously, so we can proceed without an onload handler.
-			const newImg = new Image();
-			newImg.src = newDataUrl;
+			cropRect.w = currentX - cropRect.startX;
+			cropRect.h = currentY - cropRect.startY;
 
-			// 7. Calculate the new dimensions for the item on the main canvas, preserving its area.
-			const oldArea = croppingItem.width * croppingItem.height;
-			const newAspectRatio = sourceWidth / sourceHeight;
-			const newCanvasHeight = Math.sqrt(oldArea / newAspectRatio);
-			const newCanvasWidth = oldArea / newCanvasHeight;
-			
-			// 8. Before updating the item, store its old dimensions for centering.
-			const oldCanvasWidth = croppingItem.width;
-			const oldCanvasHeight = croppingItem.height;
+			const cropCtx = cropCanvas.getContext('2d');
+			cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+			cropCtx.drawImage(croppingItem.img, 0, 0, cropCanvas.width, cropCanvas.height);
 
-			// 9. Update ALL of the item's properties in one go.
-			croppingItem.img = newImg; // *** THIS IS THE KEY: Replace the image object itself ***
-			croppingItem.src = newDataUrl;
-			croppingItem.originalWidth = sourceWidth;
-			croppingItem.originalHeight = sourceHeight;
-			croppingItem.width = newCanvasWidth;
-			croppingItem.height = newCanvasHeight;
-			// Adjust position to keep the item centered on its old position
-			croppingItem.x = croppingItem.x + (oldCanvasWidth - newCanvasWidth) / 2;
-			croppingItem.y = croppingItem.y + (oldCanvasHeight - newCanvasHeight) / 2;
+			// Draw selection rectangle
+			cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+			cropCtx.lineWidth = 2;
+			cropCtx.setLineDash([5, 3]);
+			cropCtx.strokeRect(cropRect.startX, cropRect.startY, cropRect.w, cropRect.h);
+			cropCtx.setLineDash([]);
+		}
 
-			// 10. Save state, redraw the main canvas, and close the modal.
-			saveState();
-			draw();
-			showMessage("Image cropped successfully.");
-			closeCropModal();
-		}        // --- Annotation & Styling ---
+		function handleCropTouchEnd(e) {
+			isDrawingCropRect = false;
+		}
+		
+		async function handleCropConfirm() {
+            // 1. Validate that a crop selection has been made
+            if (!croppingItem || Math.abs(cropRect.w) < 1 || Math.abs(cropRect.h) < 1) {
+                showMessage("No valid crop area selected.", 2000);
+                return;
+            }
+
+            showLoading(true); // Show spinner during processing
+
+            // 2. Normalize the rectangle to handle drawing in any direction
+            const finalCropRect = {
+                x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
+                y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
+                width: Math.abs(cropRect.w),
+                height: Math.abs(cropRect.h)
+            };
+
+            // 3. Convert the preview crop coordinates back to the original image's coordinate space
+            const sourceX = finalCropRect.x / cropCanvasScale;
+            const sourceY = finalCropRect.y / cropCanvasScale;
+            const sourceWidth = finalCropRect.width / cropCanvasScale;
+            const sourceHeight = finalCropRect.height / cropCanvasScale;
+
+            // 4. Create a temporary canvas and draw ONLY the selected portion of the original image onto it
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = sourceWidth;
+            tempCanvas.height = sourceHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(
+                croppingItem.img, // The original image
+                sourceX, sourceY, sourceWidth, sourceHeight, // The precise area to CUT from the original
+                0, 0, sourceWidth, sourceHeight // Draw that cut piece onto the new canvas
+            );
+
+            // 5. Get the new, genuinely cropped image as a Data URL
+            const newDataUrl = tempCanvas.toDataURL();
+
+            try {
+                // 6. Asynchronously load the new cropped image. This is the key change.
+                const newImg = await loadImagePromise(newDataUrl);
+
+                // --- Now that the image is guaranteed to be loaded, we can proceed ---
+
+                // 7. Calculate the new dimensions for the item on the main canvas, preserving its area.
+                const oldArea = croppingItem.width * croppingItem.height;
+                const newAspectRatio = sourceWidth / sourceHeight;
+                const newCanvasHeight = Math.sqrt(oldArea / newAspectRatio);
+                const newCanvasWidth = oldArea / newCanvasHeight;
+
+                // 8. Before updating the item, store its old dimensions for centering.
+                const oldCanvasWidth = croppingItem.width;
+                const oldCanvasHeight = croppingItem.height;
+
+                // 9. Update ALL of the item's properties in one go.
+                croppingItem.img = newImg;
+                croppingItem.src = newDataUrl;
+                croppingItem.originalWidth = sourceWidth;
+                croppingItem.originalHeight = sourceHeight;
+                croppingItem.width = newCanvasWidth;
+                croppingItem.height = newCanvasHeight;
+                // Adjust position to keep the item centered on its old position
+                croppingItem.x = croppingItem.x + (oldCanvasWidth - newCanvasWidth) / 2;
+                croppingItem.y = croppingItem.y + (oldCanvasHeight - newCanvasHeight) / 2;
+
+                // 10. Save state, redraw the main canvas, and close the modal.
+                saveState();
+                draw();
+                showMessage("Image cropped successfully.");
+
+            } catch (error) {
+                console.error("Failed to load cropped image:", error);
+                showMessage("An error occurred while applying the crop.", 4000);
+            } finally {
+                showLoading(false); // Hide spinner
+                closeCropModal();
+            }
+        }
+
+        // --- Annotation & Styling ---
         function openAnnotationModal() { 
             if (!selectedItem) return;
             if (selectedItem.type === 'textNode') {
