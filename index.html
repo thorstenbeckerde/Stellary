@@ -989,6 +989,7 @@
         let cropRect = { startX: 0, startY: 0, w: 0, h: 0 };
         let isDrawingCropRect = false;
         let cropCanvasScale = 1;
+		let lastTouchCount = 0;
         
         // --- Initialization ---
         async function init() {
@@ -1736,43 +1737,56 @@
             } 
             updateButtonStates(); 
             draw();
+			lastTouchCount = e.touches.length;
         }
 
-        function handleTouchMove(e) { 
-            e.preventDefault(); 
-            if (e.touches.length === 0) return;
-            if (isConnectingMode || isDeletingConnectionMode || connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) return; 
-            if (e.touches.length === 1 && !initialPinchDistance) {
-                const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(e, true); 
-                if (isResizing && selectedItem) {
-                    performItemResize(worldX, worldY, selectedItem, resizeCorner, itemInitialDimensions);
-                } else if (isDragging && selectedItem) { 
-                    selectedItem.x = worldX - dragStartCoords.x; 
-                    selectedItem.y = worldY - dragStartCoords.y; 
-                } else if (isPanning) { 
-                    const dx = clientX - lastPanCoords.x; 
-                    const dy = clientY - lastPanCoords.y; 
-                    translateX += dx; 
-                    translateY += dy; 
-                    lastPanCoords = { x: clientX, y: clientY }; 
-                } 
-                draw(); 
-            } else if (e.touches.length === 2) {
-                const touch1 = e.touches[0]; 
-                const touch2 = e.touches[1]; 
-                const currentPinchDistance = getDistance( 
-                    { x: touch1.clientX, y: touch1.clientY }, 
-                    { x: touch2.clientX, y: touch2.clientY } 
-                ); 
-                if (initialPinchDistance) { 
-                    const zoomFactor = currentPinchDistance / initialPinchDistance; 
-                    const midX = (touch1.clientX + touch2.clientX) / 2; 
-                    const midY = (touch1.clientY + touch2.clientY) / 2; 
-                    zoomCanvas(zoomFactor, midX, midY, true);
-                    initialPinchDistance = currentPinchDistance;
-                } 
-            } 
-        }
+        function handleTouchMove(e) {
+			e.preventDefault();
+			if (e.touches.length === 0) return;
+			if (isConnectingMode || isDeletingConnectionMode || connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) return;
+
+			// Detect the transition from a pinch (2 touches) to a pan (1 touch)
+			if (lastTouchCount === 2 && e.touches.length === 1) {
+				initialPinchDistance = null; // Exit pinch state
+				isPanning = true;            // Enter pan state
+				isDragging = false;
+				const { clientX, clientY } = getCanvasCoordinates(e, true);
+				lastPanCoords = { x: clientX, y: clientY }; // Initialize pan coordinates
+			}
+
+			if (e.touches.length === 1 && !initialPinchDistance) {
+				const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(e, true);
+				if (isResizing && selectedItem) {
+					performItemResize(worldX, worldY, selectedItem, resizeCorner, itemInitialDimensions);
+				} else if (isDragging && selectedItem) {
+					selectedItem.x = worldX - dragStartCoords.x;
+					selectedItem.y = worldY - dragStartCoords.y;
+				} else if (isPanning) {
+					const dx = clientX - lastPanCoords.x;
+					const dy = clientY - lastPanCoords.y;
+					translateX += dx;
+					translateY += dy;
+					lastPanCoords = { x: clientX, y: clientY };
+				}
+				draw();
+			} else if (e.touches.length === 2) {
+				const touch1 = e.touches[0];
+				const touch2 = e.touches[1];
+				const currentPinchDistance = getDistance(
+					{ x: touch1.clientX, y: touch1.clientY },
+					{ x: touch2.clientX, y: touch2.clientY }
+				);
+				if (initialPinchDistance) {
+					const zoomFactor = currentPinchDistance / initialPinchDistance;
+					const midX = (touch1.clientX + touch2.clientX) / 2;
+					const midY = (touch1.clientY + touch2.clientY) / 2;
+					zoomCanvas(zoomFactor, midX, midY, true);
+					initialPinchDistance = currentPinchDistance;
+				}
+			}
+			
+			lastTouchCount = e.touches.length; // Update for the next move event
+		}
         
         function handleTouchEnd(e) { 
             if (e.touches.length > 0) return; // Not the final touch end
