@@ -196,13 +196,14 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 1002;
             display: none; max-width: 90vw; width: 450px; max-height: 90vh; overflow-y: auto;
         }
+        #startupModal { z-index: 1007; }
         #donateModal { width: 400px; }
         #helpModal { 
             width: 550px; z-index: 1003; display: none; 
             flex-direction: column; max-height: 85vh;
         }
         #helpContent { overflow-y: auto; padding-right: 10px; }
-        #confirmClearConstellationModal { z-index: 1004; }
+        #confirmClearConstellationModal, #confirmDeleteSessionModal { z-index: 1008; }
         #playbackModal { z-index: 1006; }
         #playbackModal video, #playbackModal audio { width: 100%; border-radius: 4px; background-color: #f0f0f0; }
 
@@ -259,9 +260,14 @@
             <div class="tool-group flex-wrap"> <h1 class="text-xl font-bold">Stellary</h1>
             </div>
             <div class="tool-group flex-wrap">
-                <button id="saveToDeviceBtn" title="Save to Device (Ctrl+S)" class="tool-button"><i class="fas fa-download"></i> <span class="hidden md:inline">Save</span></button>
+                <!-- START: Session Save/Load Buttons -->
+                <button id="saveSessionBtn" title="Save work to this browser's local storage. Stays on this device." class="tool-button"><i class="fas fa-save"></i> <span class="hidden sm:inline">Session</span></button>
+                <button id="loadSessionBtn" title="Load work from this browser's local storage." class="tool-button"><i class="fas fa-folder-open"></i></button>
+                <div class="tool-group-separator hidden sm:block"></div>
+                <button id="saveToDeviceBtn" title="Download board as a .json file to your computer." class="tool-button"><i class="fas fa-download"></i> <span class="hidden md:inline">File</span></button>
                 <input type="file" id="loadFromDeviceInput" accept=".json" class="hidden-input">
-                <button id="loadFromDeviceBtn" title="Load from Device (Ctrl+O)" class="tool-button"><i class="fas fa-upload"></i> <span class="hidden md:inline">Load</span></button>
+                <button id="loadFromDeviceBtn" title="Load board from a .json file from your computer." class="tool-button"><i class="fas fa-upload"></i> <span class="hidden md:inline">File</span></button>
+                <!-- END: Session Save/Load Buttons -->
                 <div class="tool-group-separator hidden sm:block"></div>
                 <button id="exportPngBtn" title="Export as PNG" class="tool-button"><i class="fas fa-file-export"></i></button>
                 <button id="clearCanvasBtn" title="Clear Canvas" class="tool-button"><i class="fas fa-broom"></i></button>
@@ -318,6 +324,21 @@
 
     <div id="canvas-wrapper">
         <canvas id="constellationCanvas" tabindex="0"></canvas>
+    </div>
+
+    <!-- START: Modals -->
+    <div id="startupModal" class="modal">
+        <h3 class="text-xl font-semibold mb-3">Welcome Back!</h3>
+        <p class="text-gray-600 mb-4">
+            An existing session was found saved in this browser.
+        </p>
+        <p class="text-gray-600 mb-4">
+            Would you like to restore it, or start fresh with a blank canvas?
+        </p>
+        <div class="mt-6 flex flex-col sm:flex-row justify-end gap-2">
+            <button id="startFreshBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Start Fresh</button>
+            <button id="restoreSessionBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">Restore Session</button>
+        </div>
     </div>
     
     <div id="donateModal" class="modal">
@@ -455,6 +476,15 @@
         </div>
     </div>
 
+     <div id="confirmDeleteSessionModal" class="modal">
+        <h3 class="text-lg font-semibold mb-2">Confirm Start Fresh</h3>
+        <p class="text-sm text-gray-600 my-3">Are you sure? This will delete your previously saved session from this browser and start a new, blank canvas. This action cannot be undone.</p>
+        <div class="mt-4 flex justify-end gap-2">
+            <button id="confirmDeleteSessionCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded">Cancel</button>
+            <button id="confirmDeleteSessionOkBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Yes, Start Fresh</button>
+        </div>
+    </div>
+
     <div id="scentLexiconModal" class="modal" style="width: 600px; max-height: 80vh;">
         <h3 class="text-xl font-semibold mb-3">Poetic Scent Lexicon</h3>
         <div class="flex gap-4 mb-3">
@@ -474,6 +504,7 @@
             <button id="closeScentModalBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded">Cancel</button>
         </div>
     </div>
+    <!-- END: Modals -->
 
     <div id="loadingSpinner" class="loading-spinner"></div>
     <div id="messageBox"></div>
@@ -760,8 +791,67 @@
                { term: "Thunder’s Edge", desc: "A metallic, ion-charged scent that heralds the storm." }
            ]
         };
+        
+        // --- IndexedDB Helper ---
+        const idbHelper = {
+            db: null,
+            DB_NAME: 'stellaryDB',
+            STORE_NAME: 'sessions',
+            openDB: function() {
+                return new Promise((resolve, reject) => {
+                    if (this.db) {
+                        resolve(this.db);
+                        return;
+                    }
+                    const request = indexedDB.open(this.DB_NAME, 1);
+                    request.onerror = (event) => reject("IndexedDB error: " + request.error?.message);
+                    request.onsuccess = (event) => {
+                        this.db = event.target.result;
+                        resolve(this.db);
+                    };
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+                            db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
+                        }
+                    };
+                });
+            },
+            saveSession: async function(sessionData) {
+                const db = await this.openDB();
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([this.STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(this.STORE_NAME);
+                    const request = store.put({ id: 'currentSession', data: sessionData });
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject("Failed to save session: " + request.error?.message);
+                });
+            },
+            loadSession: async function() {
+                const db = await this.openDB();
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([this.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(this.STORE_NAME);
+                    const request = store.get('currentSession');
+                    request.onsuccess = () => resolve(request.result ? request.result.data : null);
+                    request.onerror = () => reject("Failed to load session: " + request.error?.message);
+                });
+            },
+            deleteSession: async function() {
+                const db = await this.openDB();
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([this.STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(this.STORE_NAME);
+                    const request = store.delete('currentSession');
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject("Failed to delete session: " + request.error?.message);
+                });
+            }
+        };
 
         // --- DOM Elements (Cached) ---
+        const saveSessionBtn = document.getElementById('saveSessionBtn');
+        const loadSessionBtn = document.getElementById('loadSessionBtn');
         const uploadInput = document.getElementById('uploadInput');
         const loadFromDeviceInput = document.getElementById('loadFromDeviceInput');
         const addImageBtn = document.getElementById('addImageBtn');
@@ -847,6 +937,12 @@
         const cropCanvasWrapper = document.getElementById('cropCanvasWrapper');
         const cancelCropBtn = document.getElementById('cancelCropBtn');
         const confirmCropBtn = document.getElementById('confirmCropBtn');
+        const startupModal = document.getElementById('startupModal');
+        const restoreSessionBtn = document.getElementById('restoreSessionBtn');
+        const startFreshBtn = document.getElementById('startFreshBtn');
+        const confirmDeleteSessionModal = document.getElementById('confirmDeleteSessionModal');
+        const confirmDeleteSessionOkBtn = document.getElementById('confirmDeleteSessionOkBtn');
+        const confirmDeleteSessionCancelBtn = document.getElementById('confirmDeleteSessionCancelBtn');
 
         // Preload Icon Images
         const audioIconImg = new Image();
@@ -895,7 +991,7 @@
         
         // --- Initialization ---
         function init() {
-            // ADD THIS BLOCK to read from localStorage on startup
+            // Read theme from localStorage on startup
             try {
                 const savedTheme = localStorage.getItem('stellaryLastUsedTheme');
                 if (savedTheme && THEMES[savedTheme]) {
@@ -904,7 +1000,6 @@
             } catch (e) {
                 console.warn("Could not retrieve theme from localStorage:", e);
             }
-            // END OF ADDED BLOCK
 
             audioIconImg.src = 'https://i.ibb.co/jPFst9hf/audio.png'; 
             audioIconImg.onload = () => { audioIconLoaded = true; draw(); };
@@ -920,6 +1015,10 @@
                 videoIconLoaded = false; 
                 draw();
             };
+            
+            // Event Listeners
+            saveSessionBtn.addEventListener('click', handleSaveSession);
+            loadSessionBtn.addEventListener('click', () => handleLoadSession(false)); // false because it's a manual user trigger
             addImageBtn.addEventListener('click', () => triggerUpload('image/*'));
             addAudioBtn.addEventListener('click', () => triggerUpload('audio/*'));
             addVideoBtn.addEventListener('click', () => triggerUpload('video/mp4,video/webm,video/quicktime,.mov'));
@@ -934,16 +1033,10 @@
             cropCanvas.addEventListener('mousedown', handleCropMouseDown);
             cropCanvas.addEventListener('mousemove', handleCropMouseMove);
             cropCanvas.addEventListener('mouseup', handleCropMouseUp);
-			//...
-			cropCanvas.addEventListener('mousedown', handleCropMouseDown);
-			cropCanvas.addEventListener('mousemove', handleCropMouseMove);
-			cropCanvas.addEventListener('mouseup', handleCropMouseUp);
 			cropCanvas.addEventListener('touchstart', handleCropTouchStart, { passive: false });
 			cropCanvas.addEventListener('touchmove', handleCropTouchMove, { passive: false });
 			cropCanvas.addEventListener('touchend', handleCropTouchEnd);
 			connectImagesBtn.addEventListener('click', toggleConnectMode); 
-			//...
-            connectImagesBtn.addEventListener('click', toggleConnectMode); 
             deleteConnectionBtn.addEventListener('click', toggleDeleteConnectionMode); 
             coreStarBtn.addEventListener('click', toggleCoreStar); 
             toggleEndNodeBtn.addEventListener('click', toggleEndNode); 
@@ -1012,9 +1105,34 @@
                 }
             });
 
+            // Startup modal listeners
+            restoreSessionBtn.addEventListener('click', () => {
+                startupModal.style.display = 'none';
+                handleLoadSession(true); // true = silent auto-load
+            });
+            startFreshBtn.addEventListener('click', () => {
+                startupModal.style.display = 'none';
+                confirmDeleteSessionModal.style.display = MODAL_DISPLAY_BLOCK;
+            });
+            confirmDeleteSessionOkBtn.addEventListener('click', async () => {
+                confirmDeleteSessionModal.style.display = 'none';
+                try {
+                    await idbHelper.deleteSession();
+                    showMessage("Saved session cleared.");
+                } catch (error) {
+                    console.error("Could not delete session:", error);
+                    showMessage("Error clearing session.", 4000);
+                }
+                // Initialize a clean slate
+                initializeEmptyCanvas();
+            });
+             confirmDeleteSessionCancelBtn.addEventListener('click', () => {
+                confirmDeleteSessionModal.style.display = 'none';
+                // Re-show the initial choice modal
+                startupModal.style.display = MODAL_DISPLAY_BLOCK;
+            });
+
             populateThemeSelector();
-            // The applyTheme function now also takes a second argument.
-            // We pass false because we don't want the initial theme application to count as an "undo" state.
             applyTheme(currentTheme, false);
 
             history = [];
@@ -1023,7 +1141,24 @@
             canvas.style.backgroundColor = canvasBackgroundColor;
             arrowColorPicker.value = connectionLineColor;
             updateRadialGuideColor();
-            saveState(); 
+            
+            // Check for a saved session to decide whether to show the startup modal
+            idbHelper.loadSession().then(sessionData => {
+                if (sessionData) {
+                    startupModal.style.display = MODAL_DISPLAY_BLOCK;
+                } else {
+                    initializeEmptyCanvas();
+                }
+            }).catch(error => {
+                console.error("Could not check for session on startup:", error);
+                initializeEmptyCanvas(); // Fallback to starting fresh
+            });
+        }
+        
+        function initializeEmptyCanvas() {
+            if (history.length === 0) {
+                saveState();
+            }
             resizeCanvas(); 
             canvas.focus();
         }
@@ -1059,7 +1194,7 @@
             });
             currentTheme = themeName;
 
-            // ADD THIS to save the chosen theme to localStorage
+            // Save chosen theme to localStorage
             try {
                 localStorage.setItem('stellaryLastUsedTheme', themeName);
             } catch (e) {
@@ -1071,7 +1206,7 @@
                 opt.classList.toggle('active', opt.dataset.themeName === themeName);
             });
             
-            // Only update the undo/redo history if it's a user action
+            // Only update history if it's a user action
             if (updateHistory) {
                 saveState(true);
             }
@@ -1983,13 +2118,11 @@
 			croppingItem = selectedItem;
 			isCroppingMode = true;
 
-			// --- FIX: Make the modal visible FIRST to get correct dimensions ---
 			cropModal.style.display = MODAL_DISPLAY_BLOCK;
 
 			const cropCtx = cropCanvas.getContext('2d');
 			const img = croppingItem.img;
 
-			// Add a check to ensure the image is valid and loaded
 			if (!img || !img.complete || img.naturalWidth === 0) {
 				console.error("Image to crop is not ready or invalid.", img);
 				showMessage("Cannot crop: Image data is not available.", 3000);
@@ -1997,7 +2130,6 @@
 				return;
 			}
 
-			// Now that the modal is visible, we can get the correct dimensions
 			const wrapperW = cropCanvasWrapper.clientWidth;
 			const wrapperH = cropCanvasWrapper.clientHeight;
 			const imgAspectRatio = img.naturalWidth / img.naturalHeight;
@@ -2019,7 +2151,6 @@
 			cropCanvasScale = canvasW / img.naturalWidth;
 
 			cropCtx.drawImage(img, 0, 0, canvasW, canvasH);
-			// The modal is already visible, so the final display line is no longer needed here.
 		}
 
         function closeCropModal() {
@@ -2055,7 +2186,6 @@
             cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
             cropCtx.drawImage(croppingItem.img, 0, 0, cropCanvas.width, cropCanvas.height);
 
-            // Draw selection rectangle
             cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
             cropCtx.lineWidth = 2;
             cropCtx.setLineDash([5, 3]);
@@ -2067,7 +2197,7 @@
             isDrawingCropRect = false;
         }
 		function handleCropTouchStart(e) {
-			e.preventDefault(); // This is crucial to stop the page from scrolling
+			e.preventDefault();
 			isDrawingCropRect = true;
 			const rect = cropCanvas.getBoundingClientRect();
 			const touch = e.touches[0];
@@ -2078,7 +2208,7 @@
 		}
 
 		function handleCropTouchMove(e) {
-			e.preventDefault(); // Also crucial to allow drawing instead of scrolling
+			e.preventDefault();
 			if (!isDrawingCropRect) return;
 			
 			const rect = cropCanvas.getBoundingClientRect();
@@ -2093,7 +2223,6 @@
 			cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
 			cropCtx.drawImage(croppingItem.img, 0, 0, cropCanvas.width, cropCanvas.height);
 
-			// Draw selection rectangle
 			cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
 			cropCtx.lineWidth = 2;
 			cropCtx.setLineDash([5, 3]);
@@ -2104,73 +2233,62 @@
 		function handleCropTouchEnd(e) {
 			isDrawingCropRect = false;
 		}
-		function handleCropConfirm() {
-			// 1. Validate that a crop selection has been made
-			if (!croppingItem || Math.abs(cropRect.w) < 1 || Math.abs(cropRect.h) < 1) {
-				showMessage("No valid crop area selected.", 2000);
-				return;
-			}
+		
+		async function handleCropConfirm() {
+            if (!croppingItem || Math.abs(cropRect.w) < 1 || Math.abs(cropRect.h) < 1) {
+                showMessage("No valid crop area selected.", 2000);
+                return;
+            }
+            showLoading(true);
+            const finalCropRect = {
+                x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
+                y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
+                width: Math.abs(cropRect.w),
+                height: Math.abs(cropRect.h)
+            };
+            const sourceX = finalCropRect.x / cropCanvasScale;
+            const sourceY = finalCropRect.y / cropCanvasScale;
+            const sourceWidth = finalCropRect.width / cropCanvasScale;
+            const sourceHeight = finalCropRect.height / cropCanvasScale;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = sourceWidth;
+            tempCanvas.height = sourceHeight;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(
+                croppingItem.img,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                0, 0, sourceWidth, sourceHeight
+            );
+            const newDataUrl = tempCanvas.toDataURL();
+            try {
+                const newImg = await loadImagePromise(newDataUrl);
+                const oldArea = croppingItem.width * croppingItem.height;
+                const newAspectRatio = sourceWidth / sourceHeight;
+                const newCanvasHeight = Math.sqrt(oldArea / newAspectRatio);
+                const newCanvasWidth = oldArea / newCanvasHeight;
+                const oldCanvasWidth = croppingItem.width;
+                const oldCanvasHeight = croppingItem.height;
+                croppingItem.img = newImg;
+                croppingItem.src = newDataUrl;
+                croppingItem.originalWidth = sourceWidth;
+                croppingItem.originalHeight = sourceHeight;
+                croppingItem.width = newCanvasWidth;
+                croppingItem.height = newCanvasHeight;
+                croppingItem.x = croppingItem.x + (oldCanvasWidth - newCanvasWidth) / 2;
+                croppingItem.y = croppingItem.y + (oldCanvasHeight - newCanvasHeight) / 2;
+                saveState();
+                draw();
+                showMessage("Image cropped successfully.");
+            } catch (error) {
+                console.error("Failed to load cropped image:", error);
+                showMessage("An error occurred while applying the crop.", 4000);
+            } finally {
+                showLoading(false);
+                closeCropModal();
+            }
+        }
 
-			// 2. Normalize the rectangle to handle drawing in any direction
-			const finalCropRect = {
-				x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
-				y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
-				width: Math.abs(cropRect.w),
-				height: Math.abs(cropRect.h)
-			};
-
-			// 3. Convert the preview crop coordinates back to the original image's coordinate space
-			const sourceX = finalCropRect.x / cropCanvasScale;
-			const sourceY = finalCropRect.y / cropCanvasScale;
-			const sourceWidth = finalCropRect.width / cropCanvasScale;
-			const sourceHeight = finalCropRect.height / cropCanvasScale;
-			
-			// 4. Create a temporary canvas and draw ONLY the selected portion of the original image onto it
-			const tempCanvas = document.createElement('canvas');
-			tempCanvas.width = sourceWidth;
-			tempCanvas.height = sourceHeight;
-			const tempCtx = tempCanvas.getContext('2d');
-			tempCtx.drawImage(
-				croppingItem.img, // The original image
-				sourceX, sourceY, sourceWidth, sourceHeight, // The precise area to CUT from the original
-				0, 0, sourceWidth, sourceHeight             // Draw that cut piece onto the new canvas
-			);
-
-			// 5. Get the new, genuinely cropped image as a Data URL
-			const newDataUrl = tempCanvas.toDataURL();
-			
-			// 6. Create a new Image object from the cropped data.
-			// Data URLs load synchronously, so we can proceed without an onload handler.
-			const newImg = new Image();
-			newImg.src = newDataUrl;
-
-			// 7. Calculate the new dimensions for the item on the main canvas, preserving its area.
-			const oldArea = croppingItem.width * croppingItem.height;
-			const newAspectRatio = sourceWidth / sourceHeight;
-			const newCanvasHeight = Math.sqrt(oldArea / newAspectRatio);
-			const newCanvasWidth = oldArea / newCanvasHeight;
-			
-			// 8. Before updating the item, store its old dimensions for centering.
-			const oldCanvasWidth = croppingItem.width;
-			const oldCanvasHeight = croppingItem.height;
-
-			// 9. Update ALL of the item's properties in one go.
-			croppingItem.img = newImg; // *** THIS IS THE KEY: Replace the image object itself ***
-			croppingItem.src = newDataUrl;
-			croppingItem.originalWidth = sourceWidth;
-			croppingItem.originalHeight = sourceHeight;
-			croppingItem.width = newCanvasWidth;
-			croppingItem.height = newCanvasHeight;
-			// Adjust position to keep the item centered on its old position
-			croppingItem.x = croppingItem.x + (oldCanvasWidth - newCanvasWidth) / 2;
-			croppingItem.y = croppingItem.y + (oldCanvasHeight - newCanvasHeight) / 2;
-
-			// 10. Save state, redraw the main canvas, and close the modal.
-			saveState();
-			draw();
-			showMessage("Image cropped successfully.");
-			closeCropModal();
-		}        // --- Annotation & Styling ---
+        // --- Annotation & Styling ---
         function openAnnotationModal() { 
             if (!selectedItem) return;
             if (selectedItem.type === 'textNode') {
@@ -2696,7 +2814,8 @@
             const modals = [
                 annotationModal, textNodeModal, connectionStylePickerModal,
                 exportPngModal, helpModal, scentLexiconModal,
-                confirmClearConstellationModal, playbackModal, donateModal, cropModal
+                confirmClearConstellationModal, playbackModal, donateModal, cropModal,
+                startupModal, confirmDeleteSessionModal
             ];
             return modals.some(modal => modal && (modal.style.display === MODAL_DISPLAY_BLOCK || modal.style.display === MODAL_DISPLAY_FLEX));
         }
@@ -2747,6 +2866,78 @@
             updateButtonStates(); 
         }
         
+        // --- Session Management ---
+        async function handleSaveSession() {
+            const boardData = {
+                items: items.map(item => {
+                    let savedItem = { ...item };
+                    if (item.type === 'image' && item.img) {
+                        const { img, ...rest } = item;
+                        savedItem = { ...rest, src: item.src };
+                    }
+                    return savedItem;
+                }),
+                connections: connections,
+                scale: scale, translateX: translateX, translateY: translateY,
+                canvasBackgroundColor: canvasBackgroundColor,
+                connectionLineColor: connectionLineColor,
+                radialGuideLineColor: radialGuideLineColor,
+                showRadialGuide: showRadialGuide,
+                radialGuideCoreItemId: radialGuideCoreItemId,
+                currentTheme: currentTheme,
+                version: "1.9.1"
+            };
+            try {
+                await idbHelper.saveSession(boardData);
+                showMessage("Session saved in browser.");
+            } catch (error) {
+                console.error("Error saving session:", error);
+                showMessage("Could not save session. Browser might be in private mode or storage is full.", 5000);
+            }
+        }
+
+        async function handleLoadSession(isAutoLoad = false) {
+            try {
+                const sessionData = await idbHelper.loadSession();
+                if (sessionData) {
+                    await loadState(sessionData);
+                    history = [];
+                    redoStack = [];
+                    const currentLoadedStateForHistory = {
+                        items: JSON.parse(JSON.stringify(items.map(item => {
+                            let itemCopy = { ...item };
+                            if (item.type === 'image' && item.img) {
+                                const { img, ...rest } = itemCopy;
+                                itemCopy = rest; itemCopy.src = item.img.src;
+                            }
+                            return itemCopy;
+                        }))),
+                        connections: JSON.parse(JSON.stringify(connections)),
+                        scale: scale, translateX: translateX, translateY: translateY,
+                        canvasBackgroundColor: canvasBackgroundColor,
+                        connectionLineColor: connectionLineColor,
+                        radialGuideLineColor: radialGuideLineColor,
+                        showRadialGuide: showRadialGuide,
+                        radialGuideCoreItemId: radialGuideCoreItemId,
+                        currentTheme: currentTheme
+                    };
+                    history.push(currentLoadedStateForHistory);
+                    updateUndoRedoButtons();
+                    if (!isAutoLoad) {
+                        showMessage("Session loaded from browser.");
+                    }
+                    initializeEmptyCanvas(); // This just focuses and resizes canvas
+                } else if (!isAutoLoad) {
+                    showMessage("No saved session found in this browser.");
+                }
+            } catch (error) {
+                console.error("Error loading session:", error);
+                if (!isAutoLoad) {
+                    showMessage("Could not load session from browser.", 4000);
+                }
+            }
+        }
+
         function saveBoardAsJson() { 
             const boardData = { 
                 items: items.map(item => { 
@@ -2765,7 +2956,7 @@
                 showRadialGuide: showRadialGuide,
                 radialGuideCoreItemId: radialGuideCoreItemId,
                 currentTheme: currentTheme,
-                version: "1.8.0"
+                version: "1.9.1"
             }; 
             const jsonString = JSON.stringify(boardData, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' }); 
@@ -3108,14 +3299,14 @@
                 <p class="mb-2"><strong>Stellary:</strong> A sensory-based mapping practice for how we perceive and remember. It's a poetic, tactile, and deeply personal method of reflection.</p>
                 <h4 class="text-lg font-semibold mt-3 mb-1">Core Idea:</h4>
                 <p class="mb-2">Imagine an "inner emotional galaxy." Each constellation begins with a felt sense or insight — a "star" of awareness — around which fragments of experience orbit: photographs, textures, snippets of conversation, ambient sounds, written lines, voice notes, or found objects. This method honors resonance over sequence and meaning over structure.</p>
-                <h4 class="text-lg font-semibold mt-3 mb-1">Purpose:</h4>
+                
+                <h4 class="text-lg font-semibold mt-3 mb-1">Saving & Loading Your Work</h4>
+                <p class="mb-2">There are two ways to save your work. The app will ask on startup if you want to restore a local session.</p>
                 <ul class="list-disc list-inside mb-2 space-y-1">
-                    <li>To pause and reflect.</li>
-                    <li>To archive moments of deep emotional texture.</li>
-                    <li>To make sense of a transition, loss, or breakthrough.</li>
-                    <li>For "feeling before knowing."</li>
-                    <li>It’s about presence, not productivity.</li>
+                    <li><strong>Save/Load Session:</strong> (<i class="fas fa-save"></i> / <i class="fas fa-folder-open"></i>) Saves your work to the browser's local storage. This is great for quick saves and for mobile users, as it prevents losing work when switching apps. <strong>Note:</strong> This session is stored only on this device and in this browser. Clearing your browser data will delete it.</li>
+                    <li><strong>Save/Load File:</strong> (<i class="fas fa-download"></i> / <i class="fas fa-upload"></i>) Saves/loads your work as a <code>.json</code> file on your computer. Use this for permanent backups or to move your work between different devices or browsers.</li>
                 </ul>
+
                 <h4 class="text-lg font-semibold mt-3 mb-1">Structure of a Stellary:</h4>
                 <ul class="list-disc list-inside mb-2 space-y-1">
                     <li><strong>CORE:</strong> The central emotion, moment, or insight. Mark an image as a "Core Star" using the <i class="fas fa-star text-yellow-400"></i> button.</li>
@@ -3130,7 +3321,7 @@
                     <li><strong>Interact:</strong> Single-click/tap to select. Double-click/tap media to play. Drag to move. Resize items with corner handles.</li>
                     <li><strong>Style & Annotate:</strong> Select an item and click <i class="fas fa-comment-dots"></i> (or press 'A') to add text and change styles.</li>
                     <li><strong>Connect:</strong> Use the <i class="fas fa-link"></i> button (or press 'C') to draw connections.</li>
-                    <li><strong>Save & Export:</strong> Save your work (<i class="fas fa-download"></i>) and load it (<i class="fas fa-upload"></i>) later. Export a final image via the PNG (<i class="fas fa-file-export"></i>) button.</li>
+                    <li><strong>Export:</strong> Export a final image via the PNG (<i class="fas fa-file-export"></i>) button.</li>
                 </ul>
 
                 <h4 class="text-lg font-semibold mt-3 mb-1">When to Use Stellary:</h4>
@@ -3152,8 +3343,8 @@
                         <li><strong class="w-28 inline-block">Delete/Backspace</strong> Delete Selected Item</li>
                         <li><strong class="w-28 inline-block">Ctrl/Cmd + Z</strong> Undo</li>
                         <li><strong class="w-28 inline-block">Ctrl/Cmd + Y</strong> Redo</li>
-                        <li><strong class="w-28 inline-block">Ctrl/Cmd + S</strong> Save to Device</li>
-                        <li><strong class="w-28 inline-block">Ctrl/Cmd + O</strong> Load from Device</li>
+                        <li><strong class="w-28 inline-block">Ctrl/Cmd + S</strong> Save to Device File</li>
+                        <li><strong class="w-28 inline-block">Ctrl/Cmd + O</strong> Load from Device File</li>
                         <li><strong class="w-28 inline-block">+/-</strong> Zoom In/Out</li>
                         <li><strong class="w-28 inline-block">0</strong> Reset View</li>
                         <li><strong class="w-28 inline-block">Esc</strong> Close modals or deselect item</li>
@@ -3166,12 +3357,24 @@
                 </div>
 
                 <div class="mt-4 pt-3 border-t">
-                    <h4 class="text-lg font-semibold mt-1 mb-2">License & Support</h4>
-                    <p class="mb-2">Personal use of Stellary is free. If you find it valuable, please consider making a small donation to support development. Your support is greatly appreciated! <a href="https://ko-fi.com/thorstenbecker" target="_blank" rel="noopener noreferrer" class="text-pink-500 hover:underline font-semibold">Donate here</a>.</p>
-                    <p class="mb-2">Any other use (commercial, institutional, educational, etc.) requires a license. Please contact me at <a href="mailto:hello@thorstenbecker.de" class="text-blue-500 hover:underline">hello@thorstenbecker.de</a> for inquiries.</p>
-                    <p class="mt-4 text-gray-500 text-xs">Copyright &copy; 2025 <a href="https://www.thorstenbecker.de" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Thorsten Becker</a>. All rights reserved.</p>
+                    <h4 class="text-lg font-semibold mt-1 mb-2">Usage, Licensing & Support</h4>
+                    <p class="mb-2"><strong>Free for Personal &amp; Private Use:</strong><br>Stellary is free for personal, non-commercial use, such as for private journaling, self-reflection, or creating personal memory maps.</p>
+                    
+                    <p class="mb-2"><strong>License Required for Professional &amp; Institutional Use:</strong><br>As a professional tool, a license is required for all other uses. This includes, but is not limited to:
+                        <ul class="list-disc list-inside ml-4 mt-1">
+                            <li>Use within therapeutic, coaching, or clinical practices with clients.</li>
+                            <li>Use for commercial creative projects (e.g., brand storytelling, client mood boards).</li>
+                            <li>Use in formal academic or educational workshop settings.</li>
+                        </ul>
+                    </p>
+                    
+                    <p class="mb-2">
+                        <strong>Contact:</strong> <a href="mailto:hello@thorstenbecker.de" class="text-blue-500 hover:underline">hello@thorstenbecker.de</a>
+                    </p>
+                    <p class="mt-4 text-gray-500 text-xs">Copyright &copy; <span id="help-copyright-year">2025</span> <a href="https://www.thorstenbecker.de" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Thorsten Becker</a>. All rights reserved.</p>
                 </div>
             `;
+            document.getElementById('help-copyright-year').textContent = new Date().getFullYear();
         }
         
         function openPlaybackModal(item) {
@@ -3318,11 +3521,11 @@
                     if (scent.term.toLowerCase().includes(searchTerm) || scent.desc.toLowerCase().includes(searchTerm)) {
                         const card = document.createElement('div');
                         const currentFamilyColors = familyColors[family] || familyColors.default;
-                        card.className = `scent-card ${currentFamilyColors.border}`; 
+                        card.className = `p-3 mb-2 border rounded-md cursor-pointer hover:shadow-lg transition-shadow ${currentFamilyColors.border}`; 
                         card.innerHTML = `
-                            <div class="scent-term">${scent.term}</div>
-                            <div class="scent-desc">${scent.desc}</div>
-                            <div class="scent-family ${currentFamilyColors.bg} ${currentFamilyColors.text}">${family}</div>
+                            <div class="font-semibold italic text-gray-800">"${scent.term}"</div>
+                            <div class="text-sm text-gray-600 my-1">${scent.desc}</div>
+                            <div class="text-xs font-medium inline-block px-2 py-1 rounded-full mt-2 ${currentFamilyColors.bg} ${currentFamilyColors.text}">${family}</div>
                         `;
                         card.onclick = () => addScentCardToCanvas(scent, family);
                         scentLexiconResults.appendChild(card);
