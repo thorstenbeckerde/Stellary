@@ -259,13 +259,9 @@
             <div class="tool-group flex-wrap"> <h1 class="text-xl font-bold">Stellary</h1>
             </div>
             <div class="tool-group flex-wrap">
-                <!-- MANIFEST: Save/Load buttons modified -->
-                <button id="saveSessionBtn" title="Save Session to Browser" class="tool-button"><i class="fas fa-save"></i> <span class="hidden md:inline">Save Session</span></button>
-                <button id="loadSessionBtn" title="Load Session from Browser" class="tool-button"><i class="fas fa-folder-open"></i> <span class="hidden md:inline">Load Session</span></button>
-                <div class="tool-group-separator hidden sm:block"></div>
-                <button id="saveToDeviceBtn" title="Save to Device (Ctrl+S)" class="tool-button"><i class="fas fa-download"></i> <span class="hidden md:inline">Save File</span></button>
+                <button id="saveToDeviceBtn" title="Save to Device (Ctrl+S)" class="tool-button"><i class="fas fa-download"></i> <span class="hidden md:inline">Save</span></button>
                 <input type="file" id="loadFromDeviceInput" accept=".json" class="hidden-input">
-                <button id="loadFromDeviceBtn" title="Load from Device (Ctrl+O)" class="tool-button"><i class="fas fa-upload"></i> <span class="hidden md:inline">Load File</span></button>
+                <button id="loadFromDeviceBtn" title="Load from Device (Ctrl+O)" class="tool-button"><i class="fas fa-upload"></i> <span class="hidden md:inline">Load</span></button>
                 <div class="tool-group-separator hidden sm:block"></div>
                 <button id="exportPngBtn" title="Export as PNG" class="tool-button"><i class="fas fa-file-export"></i></button>
                 <button id="clearCanvasBtn" title="Clear Canvas" class="tool-button"><i class="fas fa-broom"></i></button>
@@ -323,8 +319,6 @@
     <div id="canvas-wrapper">
         <canvas id="constellationCanvas" tabindex="0"></canvas>
     </div>
-    
-    <!-- MANIFEST: Session Restore Modal Removed -->
     
     <div id="donateModal" class="modal">
         <h3 class="text-xl font-semibold mb-3">Support Stellary</h3>
@@ -454,8 +448,7 @@
 
     <div id="confirmClearConstellationModal" class="modal">
         <h3 class="text-lg font-semibold mb-2">Confirm Clear Canvas</h3>
-        <!-- MANIFEST: Confirmation text updated -->
-        <p class="text-sm text-gray-600 my-3">Are you sure you want to clear the entire canvas? This will also delete any session saved in the browser and cannot be undone.</p>
+        <p class="text-sm text-gray-600 my-3">Are you sure you want to clear the entire canvas? This action can be undone using the Undo button (Ctrl+Z) if changes were made after loading or initialising.</p>
         <div class="mt-4 flex justify-end gap-2">
             <button id="confirmClearConstellationCancelBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded">Cancel</button>
             <button id="confirmClearConstellationOkBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Clear Canvas</button>
@@ -486,87 +479,7 @@
     <div id="messageBox"></div>
 
     <script>
-        // --- IndexedDB Wrapper ---
-        const dbManager = (() => {
-            const DB_NAME = 'StellarySessionDB'; // Renamed for clarity
-            const SESSIONS_STORE = 'sessions';
-            const ASSETS_STORE = 'mediaAssets';
-            const VERSION = 2;
-            let db = null;
-
-            function openDB() {
-                return new Promise((resolve, reject) => {
-                    if (db) {
-                        resolve(db);
-                        return;
-                    }
-                    const request = indexedDB.open(DB_NAME, VERSION);
-                    request.onerror = (event) => reject(`IndexedDB error: ${event.target.errorCode}`);
-                    request.onsuccess = (event) => {
-                        db = event.target.result;
-                        resolve(db);
-                    };
-                    request.onupgradeneeded = (event) => {
-                        const dbInstance = event.target.result;
-                        if (!dbInstance.objectStoreNames.contains(SESSIONS_STORE)) {
-                            dbInstance.createObjectStore(SESSIONS_STORE, { keyPath: 'id' });
-                        }
-                        if (!dbInstance.objectStoreNames.contains(ASSETS_STORE)) {
-                            dbInstance.createObjectStore(ASSETS_STORE, { keyPath: 'id' });
-                        }
-                    };
-                });
-            }
-
-            async function set(storeName, data) {
-                const db = await openDB();
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction(storeName, 'readwrite');
-                    const store = transaction.objectStore(storeName);
-                    const request = store.put(data);
-                    request.onsuccess = () => resolve();
-                    request.onerror = (event) => reject(`Set error on ${storeName}: ${event.target.error}`);
-                });
-            }
-
-            async function get(storeName, id) {
-                const db = await openDB();
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction(storeName, 'readonly');
-                    const store = transaction.objectStore(storeName);
-                    const request = store.get(id);
-                    request.onsuccess = () => resolve(request.result);
-                    request.onerror = (event) => reject(`Get error on ${storeName}: ${event.target.error}`);
-                });
-            }
-            
-            async function del(storeName, id) {
-                const db = await openDB();
-                return new Promise((resolve, reject) => {
-                    const transaction = db.transaction(storeName, 'readwrite');
-                    const store = transaction.objectStore(storeName);
-                    const request = store.delete(id);
-                    request.onsuccess = () => resolve();
-                    request.onerror = (event) => reject(`Delete error on ${storeName}: ${event.target.error}`);
-                });
-            }
-            
-            async function clear(storeName) {
-                const db = await openDB();
-                return new Promise((resolve, reject) => {
-                     const transaction = db.transaction(storeName, 'readwrite');
-                     const store = transaction.objectStore(storeName);
-                     const request = store.clear();
-                     request.onsuccess = () => resolve();
-                     request.onerror = (event) => reject(`Clear error on ${storeName}: ${event.target.error}`);
-                });
-            }
-
-            return { set, get, delete: del, clear, SESSIONS_STORE, ASSETS_STORE };
-        })();
-        
         // --- Constants ---
-        const SESSION_KEY = 'currentSession'; // Changed from AUTOSAVE_SESSION_KEY
         const MIN_SCALE = 0.1;
         const MAX_SCALE = 5;
         const ZOOM_SENSITIVITY = 0.001;
@@ -587,7 +500,7 @@
         const MODAL_DISPLAY_FLEX = 'flex';
         const MODAL_DISPLAY_BLOCK = 'block';
 
-        // --- Themes (omitted for brevity, same as original) ---
+        // --- Themes ---
         const THEMES = {
             'Default': {
                 '--page-bg': '#f0f2f5',
@@ -787,7 +700,7 @@
         const canvas = document.getElementById('constellationCanvas');
         const ctx = canvas.getContext('2d');
 
-        // --- Scent Lexicon Data (omitted for brevity, same as original) ---
+        // --- Scent Lexicon Data ---
         const SCENT_LEXICON = {
            "Floral": [
                { term: "A breath of Araby", desc: "A heady rush of jasmine and rose, heavy with longing and exile." },
@@ -849,8 +762,6 @@
         };
 
         // --- DOM Elements (Cached) ---
-        const saveSessionBtn = document.getElementById('saveSessionBtn');
-        const loadSessionBtn = document.getElementById('loadSessionBtn');
         const uploadInput = document.getElementById('uploadInput');
         const loadFromDeviceInput = document.getElementById('loadFromDeviceInput');
         const addImageBtn = document.getElementById('addImageBtn');
@@ -981,12 +892,10 @@
         let cropRect = { startX: 0, startY: 0, w: 0, h: 0 };
         let isDrawingCropRect = false;
         let cropCanvasScale = 1;
-		let lastTouchCount = 0;
-		let zoomDebounceTimeout = null;
-        let isDirty = false; // MANIFEST: Tracks unsaved changes
         
         // --- Initialization ---
-        async function init() {
+        function init() {
+            // ADD THIS BLOCK to read from localStorage on startup
             try {
                 const savedTheme = localStorage.getItem('stellaryLastUsedTheme');
                 if (savedTheme && THEMES[savedTheme]) {
@@ -995,30 +904,22 @@
             } catch (e) {
                 console.warn("Could not retrieve theme from localStorage:", e);
             }
+            // END OF ADDED BLOCK
 
-            bindEventListeners();
-            
             audioIconImg.src = 'https://i.ibb.co/jPFst9hf/audio.png'; 
             audioIconImg.onload = () => { audioIconLoaded = true; draw(); };
-            audioIconImg.onerror = () => { console.error("Failed to load audio icon."); audioIconLoaded = false; draw(); };
+            audioIconImg.onerror = () => { 
+                console.error("Failed to load audio icon. Using placeholder."); 
+                audioIconLoaded = false; 
+                draw(); 
+            };
             videoIconImg.src = 'https://i.ibb.co/2YYFWkLF/video.png'; 
             videoIconImg.onload = () => { videoIconLoaded = true; draw(); };
-            videoIconImg.onerror = () => { console.error("Failed to load video icon."); videoIconLoaded = false; draw();};
-
-            populateThemeSelector();
-            applyTheme(currentTheme, false);
-            resizeCanvas(); 
-            canvas.focus();
-            
-            // MANIFEST: Always start a new session on page load.
-            startNewSession();
-        }
-
-        function bindEventListeners() {
-            // MANIFEST: Removed listeners for the restore modal. Added listeners for new buttons.
-            saveSessionBtn.addEventListener('click', saveSessionToDB);
-            loadSessionBtn.addEventListener('click', loadSessionFromDB);
-
+            videoIconImg.onerror = () => { 
+                console.error("Failed to load video icon. Using placeholder."); 
+                videoIconLoaded = false; 
+                draw();
+            };
             addImageBtn.addEventListener('click', () => triggerUpload('image/*'));
             addAudioBtn.addEventListener('click', () => triggerUpload('audio/*'));
             addVideoBtn.addEventListener('click', () => triggerUpload('video/mp4,video/webm,video/quicktime,.mov'));
@@ -1030,6 +931,18 @@
             cropImageBtn.addEventListener('click', openCropModal);
             cancelCropBtn.addEventListener('click', closeCropModal);
             confirmCropBtn.addEventListener('click', handleCropConfirm);
+            cropCanvas.addEventListener('mousedown', handleCropMouseDown);
+            cropCanvas.addEventListener('mousemove', handleCropMouseMove);
+            cropCanvas.addEventListener('mouseup', handleCropMouseUp);
+			//...
+			cropCanvas.addEventListener('mousedown', handleCropMouseDown);
+			cropCanvas.addEventListener('mousemove', handleCropMouseMove);
+			cropCanvas.addEventListener('mouseup', handleCropMouseUp);
+			cropCanvas.addEventListener('touchstart', handleCropTouchStart, { passive: false });
+			cropCanvas.addEventListener('touchmove', handleCropTouchMove, { passive: false });
+			cropCanvas.addEventListener('touchend', handleCropTouchEnd);
+			connectImagesBtn.addEventListener('click', toggleConnectMode); 
+			//...
             connectImagesBtn.addEventListener('click', toggleConnectMode); 
             deleteConnectionBtn.addEventListener('click', toggleDeleteConnectionMode); 
             coreStarBtn.addEventListener('click', toggleCoreStar); 
@@ -1039,9 +952,9 @@
             arrowColorPicker.addEventListener('input', handleArrowColorChange); 
             undoBtn.addEventListener('click', undo);
             redoBtn.addEventListener('click', redo);
-            zoomInBtn.addEventListener('click', () => { zoomCanvas(1.2); debouncedUpdateHistory(); });
-			zoomOutBtn.addEventListener('click', () => { zoomCanvas(0.8); debouncedUpdateHistory(); });
-            resetZoomPanBtn.addEventListener('click', () => { resetView(); });
+            zoomInBtn.addEventListener('click', () => { zoomCanvas(1.2); saveState(); });
+            zoomOutBtn.addEventListener('click', () => { zoomCanvas(0.8); saveState(); });
+            resetZoomPanBtn.addEventListener('click', resetView); 
             bringToFrontBtn.addEventListener('click', () => changeZIndex(true));
             sendToBackBtn.addEventListener('click', () => changeZIndex(false));
             exportPngBtn.addEventListener('click', exportBoardAsPng);
@@ -1057,7 +970,7 @@
             });
             helpBtn.addEventListener('click', openHelpModal); 
             closeHelpModalBtn.addEventListener('click', closeHelpModal); 
-            confirmClearConstellationOkBtn.addEventListener('click', () => executeClearCanvas(true));
+            confirmClearConstellationOkBtn.addEventListener('click', executeClearCanvas);
             confirmClearConstellationCancelBtn.addEventListener('click', () => {
                 confirmClearConstellationModal.style.display = 'none';
             });
@@ -1073,12 +986,6 @@
             closeScentModalBtn.addEventListener('click', () => scentLexiconModal.style.display = 'none');
             scentSearchInput.addEventListener('input', populateScentLexicon);
             scentFilterSelect.addEventListener('change', populateScentLexicon);
-            donateBtn.addEventListener('click', () => { donateModal.style.display = MODAL_DISPLAY_BLOCK; });
-            closeDonateModalBtn.addEventListener('click', () => { donateModal.style.display = 'none'; });
-            themeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                themeDropdown.style.display = themeDropdown.style.display === 'block' ? 'none' : 'block';
-            });
             canvas.addEventListener('mousedown', handleMouseDown);
             canvas.addEventListener('mousemove', handleMouseMove);
             canvas.addEventListener('mouseup', handleMouseUp);
@@ -1088,52 +995,40 @@
             canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
             canvas.addEventListener('touchend', handleTouchEnd);
             canvas.addEventListener('touchcancel', handleTouchEnd);
-            cropCanvas.addEventListener('mousedown', handleCropMouseDown);
-            cropCanvas.addEventListener('mousemove', handleCropMouseMove);
-            cropCanvas.addEventListener('mouseup', handleCropMouseUp);
-			cropCanvas.addEventListener('touchstart', handleCropTouchStart, { passive: false });
-			cropCanvas.addEventListener('touchmove', handleCropTouchMove, { passive: false });
-			cropCanvas.addEventListener('touchend', handleCropTouchEnd);
             window.addEventListener('keydown', handleKeyDown);
             window.addEventListener('resize', resizeCanvas); 
             window.addEventListener('beforeunload', handleBeforeUnload); 
+
+            donateBtn.addEventListener('click', () => { donateModal.style.display = MODAL_DISPLAY_BLOCK; });
+            closeDonateModalBtn.addEventListener('click', () => { donateModal.style.display = 'none'; });
+
+            themeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                themeDropdown.style.display = themeDropdown.style.display === 'block' ? 'none' : 'block';
+            });
             window.addEventListener('click', () => {
                 if (themeDropdown.style.display === 'block') {
                     themeDropdown.style.display = 'none';
                 }
             });
-        }
-        
-        function startNewSession() {
-            items = [];
-            connections = [];
+
+            populateThemeSelector();
+            // The applyTheme function now also takes a second argument.
+            // We pass false because we don't want the initial theme application to count as an "undo" state.
+            applyTheme(currentTheme, false);
+
             history = [];
             redoStack = [];
-            canvasBackgroundColor = '#ffffff';
-            connectionLineColor = '#4A5568';
             bgColorPicker.value = canvasBackgroundColor;
             canvas.style.backgroundColor = canvasBackgroundColor;
             arrowColorPicker.value = connectionLineColor;
             updateRadialGuideColor();
-            updateHistory();
-            isDirty = false; // Fresh session is not dirty
-            draw();
-            updateButtonStates();
+            saveState(); 
+            resizeCanvas(); 
+            canvas.focus();
         }
 
-        // MANIFEST: These two functions are removed as the restore modal is gone.
-        // handleContinueSession()
-        // handleStartFresh()
-        
-        async function clearSavedSession() {
-             try {
-                await dbManager.clear(dbManager.SESSIONS_STORE);
-                await dbManager.clear(dbManager.ASSETS_STORE);
-             } catch (error) {
-                console.error("Failed to clear saved session:", error);
-             }
-        }
-
+        // --- Theme Management ---
         function populateThemeSelector() {
             themeDropdown.innerHTML = '';
             Object.keys(THEMES).forEach(themeName => {
@@ -1153,7 +1048,7 @@
             });
         }
 
-        function applyTheme(themeName, updateHistoryState = true) {
+        function applyTheme(themeName, updateHistory = true) {
             const theme = THEMES[themeName];
             if (!theme) {
                 console.error(`Theme "${themeName}" not found.`);
@@ -1164,21 +1059,25 @@
             });
             currentTheme = themeName;
 
+            // ADD THIS to save the chosen theme to localStorage
             try {
                 localStorage.setItem('stellaryLastUsedTheme', themeName);
             } catch (e) {
                 console.error("Could not save theme to localStorage:", e);
             }
 
+            // Update active class in dropdown
             document.querySelectorAll('.theme-option').forEach(opt => {
                 opt.classList.toggle('active', opt.dataset.themeName === themeName);
             });
             
-            if (updateHistoryState) {
-                updateHistory(true);
+            // Only update the undo/redo history if it's a user action
+            if (updateHistory) {
+                saveState(true);
             }
         }
 
+        // --- Canvas & View ---
         function resizeCanvas() {
             if (canvas.clientWidth > 0 && canvas.clientHeight > 0) {
                  canvas.width = canvas.clientWidth;
@@ -1204,14 +1103,14 @@
             scale = 1;
             translateX = 0;
             translateY = 0;
-            updateHistory();
+            saveState();
             draw();
         }
         
         function getCanvasCoordinates(event, isTouchEvent = false) {
             const rect = canvas.getBoundingClientRect();
-            const clientX = isTouchEvent ? event.touches[0].clientX : event.clientX;
-            const clientY = isTouchEvent ? event.touches[0].clientY : event.clientY;
+            const clientX = isTouchEvent ? event.clientX : event.clientX;
+            const clientY = isTouchEvent ? event.clientY : event.clientY;
             return {
                 worldX: (clientX - rect.left - translateX) / scale,
                 worldY: (clientY - rect.top - translateY) / scale,
@@ -1220,7 +1119,7 @@
             };
         }
 
-        // --- DRAWING FUNCTIONS (omitted for brevity, same as original) ---
+        // --- Drawing ---
         function draw() {
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height); 
@@ -1265,8 +1164,8 @@
                     ctx.lineWidth = 3 + (item.borderWidth > 0 ? 1: 0); 
                     ctx.strokeRect(item.x - 1, item.y - 1, item.width + 2, item.height + 2); 
                 }
-            } else if ((item.type === 'audio' || item.type === 'video')) {
-                 drawMediaPlaceholder(item);
+            } else if (item.type === 'audio' || item.type === 'video') {
+                drawMediaPlaceholder(item);
             } else if (item.type === 'textNode') { 
                 drawTextNode(item);
             } else if (item.type === 'scentCard') { 
@@ -1289,11 +1188,15 @@
             const iconPadding = Math.min(item.width, item.height) * 0.2; 
             const iconContentWidth = item.width - 2 * iconPadding;
             const iconContentHeight = item.height - 2 * iconPadding;
-            
-            const targetIcon = item.type === 'audio' ? audioIconImg : videoIconImg;
-            const iconLoadedFlag = item.type === 'audio' ? audioIconLoaded : videoIconLoaded;
-            
-            if (iconLoadedFlag && targetIcon && targetIcon.complete && targetIcon.naturalWidth > 0) {
+            let targetIcon, iconLoadedFlag;
+            if (item.type === 'audio') {
+                targetIcon = audioIconImg;
+                iconLoadedFlag = audioIconLoaded;
+            } else {
+                targetIcon = videoIconImg;
+                iconLoadedFlag = videoIconLoaded;
+            }
+            if (iconLoadedFlag && targetIcon.complete && targetIcon.naturalWidth > 0) {
                 const iconAspect = targetIcon.naturalWidth / targetIcon.naturalHeight;
                 let drawWidth = iconContentWidth;
                 let drawHeight = iconContentWidth / iconAspect;
@@ -1518,7 +1421,7 @@
             }
         }
 
-        // --- MOUSE AND TOUCH HANDLERS (omitted for brevity, minor changes to call updateHistory) ---
+        // --- Event Handlers ---
         function handleMouseDown(e) {
             e.preventDefault();
             if (isAnyModalOpen()) {
@@ -1620,7 +1523,7 @@
                  lastTapItemId = null; 
             }
             if (isDragging || isResizing || isPanning) { 
-                updateHistory(); 
+                saveState(); 
             } 
             isDragging = false; 
             isResizing = false; 
@@ -1641,16 +1544,16 @@
         }
         
         function handleWheelZoom(e) { 
-			e.preventDefault(); 
-			const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-			zoomCanvas(zoomFactor, e.clientX, e.clientY); 
-			debouncedUpdateHistory();
-		}
+            e.preventDefault(); 
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            zoomCanvas(zoomFactor, e.clientX, e.clientY); 
+            saveState();
+        }
         
         function handleTouchStart(e) {
             e.preventDefault();
-            if (e.touches.length === 0) return;
             const touch = e.touches[0];
+            if (!touch) return;
             if (isAnyModalOpen()) {
                 if (helpModal.style.display === MODAL_DISPLAY_FLEX) {
                     const modalRect = helpModal.getBoundingClientRect();
@@ -1660,7 +1563,7 @@
                 }
                 return;
             }
-            const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(e, true); 
+            const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(touch, true); 
             touchStartCoords = { x: worldX, y: worldY };
             if (e.touches.length === 1 && selectedItem ) {
                 const corner = getResizeCorner(worldX, worldY, selectedItem);
@@ -1703,64 +1606,52 @@
             } 
             updateButtonStates(); 
             draw();
-			lastTouchCount = e.touches.length;
         }
 
-        function handleTouchMove(e) {
-			e.preventDefault();
-			if (e.touches.length === 0) return;
-			if (isConnectingMode || isDeletingConnectionMode || connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) return;
-
-			// Detect the transition from a pinch (2 touches) to a pan (1 touch)
-			if (lastTouchCount === 2 && e.touches.length === 1) {
-				initialPinchDistance = null; // Exit pinch state
-				isPanning = true;            // Enter pan state
-				isDragging = false;
-				const { clientX, clientY } = getCanvasCoordinates(e, true);
-				lastPanCoords = { x: clientX, y: clientY }; // Initialize pan coordinates
-			}
-
-			if (e.touches.length === 1 && !initialPinchDistance) {
-				const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(e, true);
-				if (isResizing && selectedItem) {
-					performItemResize(worldX, worldY, selectedItem, resizeCorner, itemInitialDimensions);
-				} else if (isDragging && selectedItem) {
-					selectedItem.x = worldX - dragStartCoords.x;
-					selectedItem.y = worldY - dragStartCoords.y;
-				} else if (isPanning) {
-					const dx = clientX - lastPanCoords.x;
-					const dy = clientY - lastPanCoords.y;
-					translateX += dx;
-					translateY += dy;
-					lastPanCoords = { x: clientX, y: clientY };
-				}
-				draw();
-			} else if (e.touches.length === 2) {
-				const touch1 = e.touches[0];
-				const touch2 = e.touches[1];
-				const currentPinchDistance = getDistance(
-					{ x: touch1.clientX, y: touch1.clientY },
-					{ x: touch2.clientX, y: touch2.clientY }
-				);
-				if (initialPinchDistance) {
-					const zoomFactor = currentPinchDistance / initialPinchDistance;
-					const midX = (touch1.clientX + touch2.clientX) / 2;
-					const midY = (touch1.clientY + touch2.clientY) / 2;
-					zoomCanvas(zoomFactor, midX, midY, true);
-					initialPinchDistance = currentPinchDistance;
-				}
-			}
-			
-			lastTouchCount = e.touches.length; // Update for the next move event
-		}
+        function handleTouchMove(e) { 
+            e.preventDefault(); 
+            if (isConnectingMode || isDeletingConnectionMode || connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) return; 
+            if (e.touches.length === 1 && !initialPinchDistance) {
+                const touch = e.touches[0]; 
+                const { worldX, worldY, clientX, clientY } = getCanvasCoordinates(touch, true); 
+                if (isResizing && selectedItem) {
+                    performItemResize(worldX, worldY, selectedItem, resizeCorner, itemInitialDimensions);
+                } else if (isDragging && selectedItem) { 
+                    selectedItem.x = worldX - dragStartCoords.x; 
+                    selectedItem.y = worldY - dragStartCoords.y; 
+                } else if (isPanning) { 
+                    const dx = clientX - lastPanCoords.x; 
+                    const dy = clientY - lastPanCoords.y; 
+                    translateX += dx; 
+                    translateY += dy; 
+                    lastPanCoords = { x: clientX, y: clientY }; 
+                } 
+                draw(); 
+            } else if (e.touches.length === 2) {
+                const touch1 = e.touches[0]; 
+                const touch2 = e.touches[1]; 
+                const currentPinchDistance = getDistance( 
+                    { x: touch1.clientX, y: touch1.clientY }, 
+                    { x: touch2.clientX, y: touch2.clientY } 
+                ); 
+                if (initialPinchDistance) { 
+                    const zoomFactor = currentPinchDistance / initialPinchDistance; 
+                    const midX = (touch1.clientX + touch2.clientX) / 2; 
+                    const midY = (touch1.clientY + touch2.clientY) / 2; 
+                    zoomCanvas(zoomFactor, midX, midY, true);
+                    initialPinchDistance = currentPinchDistance;
+                } 
+            } 
+        }
         
         function handleTouchEnd(e) { 
-            if (e.touches.length > 0) return; // Not the final touch end
             if (isConnectingMode || isDeletingConnectionMode || connectionStylePickerModal.style.display === MODAL_DISPLAY_BLOCK) {
                 if (initialPinchDistance) initialPinchDistance = null;
                 return;
             }
-            const { worldX, worldY } = getCanvasCoordinates(e, true);
+            const touch = e.changedTouches[0];
+            if (!touch) return;
+            const { worldX, worldY } = getCanvasCoordinates(touch, true);
             const initialTouchDownX = touchStartCoords.x;
             const initialTouchDownY = touchStartCoords.y;
             const hasMovedSignificantly = Math.abs(worldX - initialTouchDownX) * scale > 10 || Math.abs(worldY - initialTouchDownY) * scale > 10;
@@ -1783,7 +1674,7 @@
                 lastTapItemId = null;
             }
             if (isDragging || isResizing || isPanning || initialPinchDistance) { 
-                updateHistory(); 
+                saveState(); 
             } 
             isDragging = false; 
             isResizing = false; 
@@ -1794,7 +1685,6 @@
             draw(); 
         }
 
-        // --- CROP HANDLERS (omitted for brevity, same as original) ---
         function performItemResize(currentWorldX, currentWorldY, item, corner, initialDims) {
             let newX = initialDims.x;
             let newY = initialDims.y;
@@ -1851,7 +1741,7 @@
             if (clickedConnection) { 
                 connections = connections.filter(conn => conn.id !== clickedConnection.id); 
                 showMessage("Connection deleted."); 
-                updateHistory(); 
+                saveState(); 
                 draw(); 
             } 
             toggleDeleteConnectionMode();
@@ -1899,94 +1789,108 @@
             } 
         }
         
+        // --- Item & Connection Management ---
         function triggerUpload(acceptType) {
             uploadInput.accept = acceptType;
             uploadInput.click();
         }
 
-        async function handleFileUpload(e) {
-            const files = Array.from(e.target.files);
-            if (files.length === 0) return;
-            
-            showLoading(true);
-            const processingPromises = files.map(file => processSingleFile(file));
-            const results = await Promise.all(processingPromises);
-            
-            const newItems = results.filter(Boolean);
-            if (newItems.length > 0) {
-                items.push(...newItems);
-                selectedItem = newItems[newItems.length - 1];
+        function handleFileUpload(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) {
+                e.target.value = null;
+                return;
             }
-
-            finalizeUpload(newItems.length, files.length);
+            showLoading(true);
+            let filesToProcess = Array.from(files).length;
+            let loadedCount = 0;
+            Array.from(files).forEach(file => {
+                if (file.size > MAX_FILE_SIZE) {
+                    showMessage(`File "${file.name}" exceeds ${MAX_FILE_SIZE / (1024*1024)} MB limit.`, 4000);
+                    filesToProcess--;
+                    if (filesToProcess === 0) {
+                        finalizeUpload(loadedCount, files.length);
+                    }
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const fileType = file.type.split('/')[0];
+                    const dataUrl = event.target.result;
+                    const commonProperties = {
+                        src: dataUrl,
+                        x: (canvas.width / 2 - DEFAULT_AUDIO_VIDEO_WIDTH / 2 - translateX) / scale, 
+                        y: (canvas.height / 2 - DEFAULT_AUDIO_VIDEO_HEIGHT / 2 - translateY) / scale,
+                        zIndex: items.length,
+                        id: generateUniqueId('item'),
+                        annotation: null,
+                        createdAt: new Date().toISOString()
+                    };
+                    if (fileType === 'image') {
+                        const img = new Image();
+                        img.onload = () => {
+                            const aspectRatio = img.width / img.height;
+                            const newItem = {
+                                ...commonProperties,
+                                type: 'image',
+                                img: img,
+                                x: (canvas.width / 2 - DEFAULT_IMAGE_WIDTH / 2 - translateX) / scale, 
+                                y: (canvas.height / 2 - (DEFAULT_IMAGE_WIDTH/aspectRatio) / 2 - translateY) / scale,
+                                width: DEFAULT_IMAGE_WIDTH,
+                                height: DEFAULT_IMAGE_WIDTH / aspectRatio,
+                                originalWidth: img.width,
+                                originalHeight: img.height,
+                                borderColor: '#000000',
+                                borderWidth: 0,
+                                isCoreStar: false,
+                                isEndNode: false
+                            };
+                            items.push(newItem);
+                            selectedItem = newItem;
+                            loadedCount++;
+                            filesToProcess--;
+                            if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                        };
+                        img.onerror = () => {
+                            console.error("Error loading image:", file.name);
+                            showMessage(`Error loading image: ${file.name}`);
+                            filesToProcess--;
+                            if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                        };
+                        img.src = dataUrl;
+                    } else if (fileType === 'audio' || fileType === 'video') {
+                        const newItem = {
+                            ...commonProperties,
+                            type: fileType,
+                            width: DEFAULT_AUDIO_VIDEO_WIDTH, 
+                            height: DEFAULT_AUDIO_VIDEO_HEIGHT,
+                            originalWidth: DEFAULT_AUDIO_VIDEO_WIDTH, 
+                            originalHeight: DEFAULT_AUDIO_VIDEO_HEIGHT
+                        };
+                        items.push(newItem);
+                        selectedItem = newItem;
+                        loadedCount++;
+                        filesToProcess--;
+                        if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                    } else {
+                        console.warn("Unsupported file type:", file.name, file.type);
+                        filesToProcess--;
+                         if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                    }
+                };
+                reader.onerror = () => {
+                    console.error("Error reading file:", file.name);
+                    showMessage(`Error reading file: ${file.name}`);
+                     filesToProcess--;
+                     if (filesToProcess === 0) finalizeUpload(loadedCount, files.length);
+                };
+                reader.readAsDataURL(file);
+            });
             e.target.value = null;
         }
 
-        async function processSingleFile(file) {
-            if (file.size > MAX_FILE_SIZE) {
-                showMessage(`File "${file.name}" exceeds ${MAX_FILE_SIZE / (1024*1024)} MB limit.`, 4000);
-                return null;
-            }
-
-            try {
-                const dataUrl = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = event => resolve(event.target.result);
-                    reader.onerror = error => reject(error);
-                    reader.readAsDataURL(file);
-                });
-
-                const fileType = file.type.split('/')[0];
-                const itemId = generateUniqueId(fileType);
-
-                await dbManager.set(dbManager.ASSETS_STORE, { id: itemId, data: dataUrl });
-
-                const commonProperties = {
-                    id: itemId,
-                    x: (canvas.width / 2 - DEFAULT_IMAGE_WIDTH / 2 - translateX) / scale,
-                    y: (canvas.height / 2 - DEFAULT_IMAGE_WIDTH / 2 - translateY) / scale,
-                    zIndex: items.length + 1,
-                    annotation: null,
-                    createdAt: new Date().toISOString()
-                };
-
-                if (fileType === 'image') {
-                    const img = await loadImagePromise(dataUrl);
-                    const aspectRatio = img.width / img.height;
-                    return {
-                        ...commonProperties,
-                        type: 'image',
-                        img: img,
-                        y: (canvas.height / 2 - (DEFAULT_IMAGE_WIDTH / aspectRatio) / 2 - translateY) / scale,
-                        width: DEFAULT_IMAGE_WIDTH,
-                        height: DEFAULT_IMAGE_WIDTH / aspectRatio,
-                        originalWidth: img.width,
-                        originalHeight: img.height,
-                        borderColor: '#000000',
-                        borderWidth: 0,
-                        isCoreStar: false,
-                        isEndNode: false
-                    };
-                } else if (fileType === 'audio' || fileType === 'video') {
-                    return {
-                        ...commonProperties,
-                        type: fileType,
-                        width: DEFAULT_AUDIO_VIDEO_WIDTH,
-                        height: DEFAULT_AUDIO_VIDEO_HEIGHT,
-                        originalWidth: DEFAULT_AUDIO_VIDEO_WIDTH,
-                        originalHeight: DEFAULT_AUDIO_VIDEO_HEIGHT,
-                    };
-                }
-                return null;
-            } catch (error) {
-                console.error("Error processing file:", file.name, error);
-                showMessage(`Error processing file: ${file.name}`);
-                return null;
-            }
-        }
-
         function finalizeUpload(loadedCount, totalFilesAttempted) {
-            updateHistory();
+            saveState();
             updateButtonStates();
             draw();
             showLoading(false);
@@ -1998,18 +1902,9 @@
             }
         }
         
-        async function deleteSelectedItem() { 
+        function deleteSelectedItem() { 
             if (!selectedItem) return; 
-            const itemIdToDelete = selectedItem.id;
-            
-            if (['image', 'audio', 'video'].includes(selectedItem.type)) {
-                try {
-                    await dbManager.delete(dbManager.ASSETS_STORE, itemIdToDelete);
-                } catch(e) {
-                    console.error("Could not delete asset from DB:", e);
-                }
-            }
-             
+            const itemIdToDelete = selectedItem.id; 
             items = items.filter(item => item.id !== itemIdToDelete); 
             connections = connections.filter(conn => conn.fromId !== itemIdToDelete && conn.toId !== itemIdToDelete); 
             if (radialGuideCoreItemId === itemIdToDelete) { 
@@ -2017,7 +1912,7 @@
                 radialGuideCoreItemId = null;
             }
             selectedItem = null; 
-            updateHistory(); 
+            saveState(); 
             updateButtonStates(); 
             draw(); 
             showMessage("Item deleted."); 
@@ -2038,7 +1933,7 @@
                         radialGuideCoreItemId = null;
                     }
                 } 
-                updateHistory(); draw(); updateButtonStates(); 
+                saveState(); draw(); updateButtonStates(); 
             } 
         }
 
@@ -2055,7 +1950,7 @@
                 } else { 
                     showMessage(`Image unmarked as End Node.`); 
                 } 
-                updateHistory(); draw(); updateButtonStates(); 
+                saveState(); draw(); updateButtonStates(); 
             } 
         }
         
@@ -2078,20 +1973,23 @@
             } 
             items.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)); 
             items.forEach((item, index) => { item.zIndex = index; }); 
-            updateHistory(); 
+            saveState(); 
             draw(); 
         }
 
+        // --- Image Cropping ---
 		function openCropModal() {
 			if (!selectedItem || selectedItem.type !== 'image') return;
 			croppingItem = selectedItem;
 			isCroppingMode = true;
 
+			// --- FIX: Make the modal visible FIRST to get correct dimensions ---
 			cropModal.style.display = MODAL_DISPLAY_BLOCK;
 
 			const cropCtx = cropCanvas.getContext('2d');
 			const img = croppingItem.img;
 
+			// Add a check to ensure the image is valid and loaded
 			if (!img || !img.complete || img.naturalWidth === 0) {
 				console.error("Image to crop is not ready or invalid.", img);
 				showMessage("Cannot crop: Image data is not available.", 3000);
@@ -2099,6 +1997,7 @@
 				return;
 			}
 
+			// Now that the modal is visible, we can get the correct dimensions
 			const wrapperW = cropCanvasWrapper.clientWidth;
 			const wrapperH = cropCanvasWrapper.clientHeight;
 			const imgAspectRatio = img.naturalWidth / img.naturalHeight;
@@ -2120,6 +2019,7 @@
 			cropCanvasScale = canvasW / img.naturalWidth;
 
 			cropCtx.drawImage(img, 0, 0, canvasW, canvasH);
+			// The modal is already visible, so the final display line is no longer needed here.
 		}
 
         function closeCropModal() {
@@ -2155,6 +2055,7 @@
             cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
             cropCtx.drawImage(croppingItem.img, 0, 0, cropCanvas.width, cropCanvas.height);
 
+            // Draw selection rectangle
             cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
             cropCtx.lineWidth = 2;
             cropCtx.setLineDash([5, 3]);
@@ -2165,9 +2066,8 @@
         function handleCropMouseUp(e) {
             isDrawingCropRect = false;
         }
-
 		function handleCropTouchStart(e) {
-			e.preventDefault(); 
+			e.preventDefault(); // This is crucial to stop the page from scrolling
 			isDrawingCropRect = true;
 			const rect = cropCanvas.getBoundingClientRect();
 			const touch = e.touches[0];
@@ -2178,7 +2078,7 @@
 		}
 
 		function handleCropTouchMove(e) {
-			e.preventDefault(); 
+			e.preventDefault(); // Also crucial to allow drawing instead of scrolling
 			if (!isDrawingCropRect) return;
 			
 			const rect = cropCanvas.getBoundingClientRect();
@@ -2193,6 +2093,7 @@
 			cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
 			cropCtx.drawImage(croppingItem.img, 0, 0, cropCanvas.width, cropCanvas.height);
 
+			// Draw selection rectangle
 			cropCtx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
 			cropCtx.lineWidth = 2;
 			cropCtx.setLineDash([5, 3]);
@@ -2203,74 +2104,73 @@
 		function handleCropTouchEnd(e) {
 			isDrawingCropRect = false;
 		}
-		
-		async function handleCropConfirm() {
-            if (!croppingItem || Math.abs(cropRect.w) < 1 || Math.abs(cropRect.h) < 1) {
-                showMessage("No valid crop area selected.", 2000);
-                return;
-            }
+		function handleCropConfirm() {
+			// 1. Validate that a crop selection has been made
+			if (!croppingItem || Math.abs(cropRect.w) < 1 || Math.abs(cropRect.h) < 1) {
+				showMessage("No valid crop area selected.", 2000);
+				return;
+			}
 
-            showLoading(true);
+			// 2. Normalize the rectangle to handle drawing in any direction
+			const finalCropRect = {
+				x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
+				y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
+				width: Math.abs(cropRect.w),
+				height: Math.abs(cropRect.h)
+			};
 
-            const finalCropRect = {
-                x: cropRect.w > 0 ? cropRect.startX : cropRect.startX + cropRect.w,
-                y: cropRect.h > 0 ? cropRect.startY : cropRect.startY + cropRect.h,
-                width: Math.abs(cropRect.w),
-                height: Math.abs(cropRect.h)
-            };
+			// 3. Convert the preview crop coordinates back to the original image's coordinate space
+			const sourceX = finalCropRect.x / cropCanvasScale;
+			const sourceY = finalCropRect.y / cropCanvasScale;
+			const sourceWidth = finalCropRect.width / cropCanvasScale;
+			const sourceHeight = finalCropRect.height / cropCanvasScale;
+			
+			// 4. Create a temporary canvas and draw ONLY the selected portion of the original image onto it
+			const tempCanvas = document.createElement('canvas');
+			tempCanvas.width = sourceWidth;
+			tempCanvas.height = sourceHeight;
+			const tempCtx = tempCanvas.getContext('2d');
+			tempCtx.drawImage(
+				croppingItem.img, // The original image
+				sourceX, sourceY, sourceWidth, sourceHeight, // The precise area to CUT from the original
+				0, 0, sourceWidth, sourceHeight             // Draw that cut piece onto the new canvas
+			);
 
-            const sourceX = finalCropRect.x / cropCanvasScale;
-            const sourceY = finalCropRect.y / cropCanvasScale;
-            const sourceWidth = finalCropRect.width / cropCanvasScale;
-            const sourceHeight = finalCropRect.height / cropCanvasScale;
+			// 5. Get the new, genuinely cropped image as a Data URL
+			const newDataUrl = tempCanvas.toDataURL();
+			
+			// 6. Create a new Image object from the cropped data.
+			// Data URLs load synchronously, so we can proceed without an onload handler.
+			const newImg = new Image();
+			newImg.src = newDataUrl;
 
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = sourceWidth;
-            tempCanvas.height = sourceHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCtx.drawImage(
-                croppingItem.img, 
-                sourceX, sourceY, sourceWidth, sourceHeight,
-                0, 0, sourceWidth, sourceHeight
-            );
+			// 7. Calculate the new dimensions for the item on the main canvas, preserving its area.
+			const oldArea = croppingItem.width * croppingItem.height;
+			const newAspectRatio = sourceWidth / sourceHeight;
+			const newCanvasHeight = Math.sqrt(oldArea / newAspectRatio);
+			const newCanvasWidth = oldArea / newCanvasHeight;
+			
+			// 8. Before updating the item, store its old dimensions for centering.
+			const oldCanvasWidth = croppingItem.width;
+			const oldCanvasHeight = croppingItem.height;
 
-            const newDataUrl = tempCanvas.toDataURL();
+			// 9. Update ALL of the item's properties in one go.
+			croppingItem.img = newImg; // *** THIS IS THE KEY: Replace the image object itself ***
+			croppingItem.src = newDataUrl;
+			croppingItem.originalWidth = sourceWidth;
+			croppingItem.originalHeight = sourceHeight;
+			croppingItem.width = newCanvasWidth;
+			croppingItem.height = newCanvasHeight;
+			// Adjust position to keep the item centered on its old position
+			croppingItem.x = croppingItem.x + (oldCanvasWidth - newCanvasWidth) / 2;
+			croppingItem.y = croppingItem.y + (oldCanvasHeight - newCanvasHeight) / 2;
 
-            try {
-                await dbManager.set(dbManager.ASSETS_STORE, { id: croppingItem.id, data: newDataUrl });
-                
-                const newImg = await loadImagePromise(newDataUrl);
-
-                const oldArea = croppingItem.width * croppingItem.height;
-                const newAspectRatio = sourceWidth / sourceHeight;
-                const newCanvasHeight = Math.sqrt(oldArea / newAspectRatio);
-                const newCanvasWidth = oldArea / newCanvasHeight;
-
-                const oldCanvasWidth = croppingItem.width;
-                const oldCanvasHeight = croppingItem.height;
-
-                croppingItem.img = newImg;
-                croppingItem.originalWidth = sourceWidth;
-                croppingItem.originalHeight = sourceHeight;
-                croppingItem.width = newCanvasWidth;
-                croppingItem.height = newCanvasHeight;
-                croppingItem.x = croppingItem.x + (oldCanvasWidth - newCanvasWidth) / 2;
-                croppingItem.y = croppingItem.y + (oldCanvasHeight - newCanvasHeight) / 2;
-
-                updateHistory();
-                draw();
-                showMessage("Image cropped successfully.");
-
-            } catch (error) {
-                console.error("Failed to process cropped image:", error);
-                showMessage("An error occurred while applying the crop.", 4000);
-            } finally {
-                showLoading(false); 
-                closeCropModal();
-            }
-        }
-
-        // --- MODAL AND UI FUNCTIONS (omitted for brevity, same as original) ---
+			// 10. Save state, redraw the main canvas, and close the modal.
+			saveState();
+			draw();
+			showMessage("Image cropped successfully.");
+			closeCropModal();
+		}        // --- Annotation & Styling ---
         function openAnnotationModal() { 
             if (!selectedItem) return;
             if (selectedItem.type === 'textNode') {
@@ -2337,11 +2237,12 @@
             }
             if (message) showMessage(message);
             closeAnnotationModal(); 
-            updateHistory(); 
+            saveState(); 
             draw(); 
             updateButtonStates(); 
         }
 
+        // --- Text Node Modal ---
         function openTextNodeModalForAdd() {
             editingTextNode = null;
             textNodeModalTitle.textContent = "Add Text Snippet";
@@ -2420,11 +2321,12 @@
                 showMessage("Text snippet added.");
             }
             closeTextNodeModal();
-            updateHistory();
+            saveState();
             draw();
             updateButtonStates();
         }
 
+        // --- Connection Styling ---
         function handleConnectionStyleChoice(style) {
             if (pendingConnectionDetails && pendingConnectionDetails.startItem && pendingConnectionDetails.endItem) {
                 connections.push({ 
@@ -2434,7 +2336,7 @@
                     lineStyle: style 
                 });
                 showMessage(`Connection added with ${style} style.`);
-                updateHistory();
+                saveState();
             }
             connectionStylePickerModal.style.display = 'none';
             pendingConnectionDetails = null;
@@ -2454,6 +2356,7 @@
             updateButtonStates();
         }
         
+        // --- Radial Guide ---
         function toggleRadialGuide() {
             if (showRadialGuide) {
                 showRadialGuide = false;
@@ -2468,7 +2371,7 @@
             }
             updateButtonStates(); 
             draw(); 
-            updateHistory(); 
+            saveState(); 
         }
 
         function updateRadialGuideColor() {
@@ -2480,6 +2383,7 @@
             }
         }
 
+        // --- UI Updates & State ---
         function updateButtonStates() {
             const isItemSelected = !!selectedItem;
             const isImageSelected = selectedItem && selectedItem.type === 'image';
@@ -2518,149 +2422,120 @@
             toggleRadialGuideBtn.classList.toggle('active-mode-radial', showRadialGuide);
         }
 
-        // MANIFEST: Renamed saveState to updateHistory and removed DB saving logic.
-        function updateHistory(isMinorUpdate = false) {
-            isDirty = true; // Mark session as having unsaved changes
-            const canvasState = {
-                items: items.map(item => { const { img, ...lean } = item; return lean; }),
+        function saveState(isMinorUpdate = false) {
+            const state = {
+                items: JSON.parse(JSON.stringify(items.map(item => { 
+                    if (item.type === 'image' && item.img) { 
+                        const { img, ...rest } = item;
+                        return { ...rest, src: item.src };
+                    }
+                    return { ...item }; 
+                }))),
                 connections: JSON.parse(JSON.stringify(connections)),
-                scale, translateX, translateY,
-                canvasBackgroundColor, connectionLineColor,
-                radialGuideLineColor, showRadialGuide,
-                radialGuideCoreItemId, currentTheme
+                scale: scale, 
+                translateX: translateX, 
+                translateY: translateY,
+                canvasBackgroundColor: canvasBackgroundColor, 
+                connectionLineColor: connectionLineColor,
+                radialGuideLineColor: radialGuideLineColor, 
+                showRadialGuide: showRadialGuide,
+                radialGuideCoreItemId: radialGuideCoreItemId,
+                currentTheme: currentTheme
             };
 
             if (isMinorUpdate && history.length > 0) {
-                history[history.length - 1] = canvasState;
+                 // Overwrite the last state for UI-only changes like theming
+                 history[history.length - 1] = state;
             } else {
-                if (history.length > 0) redoStack = [];
-                history.push(canvasState);
-                if (history.length > MAX_HISTORY_STATES) {
+                // For actual canvas changes, push a new state
+                if (history.length > 0) redoStack = []; // Clear redo stack on new action
+                if (history.length >= MAX_HISTORY_STATES) { 
                     history.shift();
                 }
+                history.push(state); 
             }
-
             updateUndoRedoButtons();
         }
 
-        // MANIFEST: New function to save session to IndexedDB
-        async function saveSessionToDB() {
+		async function loadState(stateOrBoardData) {
             showLoading(true);
-            try {
-                // We save the full state including history so undo/redo works after loading
-                const sessionToSave = {
-                    items: items.map(item => { const { img, ...lean } = item; return lean; }),
-                    connections: JSON.parse(JSON.stringify(connections)),
-                    scale, translateX, translateY,
-                    canvasBackgroundColor, connectionLineColor,
-                    radialGuideLineColor, showRadialGuide,
-                    radialGuideCoreItemId, currentTheme,
-                    history: history,
-                    redoStack: redoStack
-                };
-
-                await dbManager.set(dbManager.SESSIONS_STORE, { id: SESSION_KEY, data: sessionToSave, timestamp: Date.now() });
-                isDirty = false; // Mark as saved
-                showMessage("Session saved to browser successfully!", 2000);
-            } catch (err) {
-                console.error("Save session failed:", err);
-                showMessage("Error saving session to browser.", 3000);
-            } finally {
-                showLoading(false);
+            if (stateOrBoardData.transform && typeof stateOrBoardData.scale === 'undefined') { 
+                scale = stateOrBoardData.transform.scale || 1; 
+                translateX = stateOrBoardData.transform.translateX || 0; 
+                translateY = stateOrBoardData.transform.translateY || 0;
+            } else { 
+                scale = stateOrBoardData.scale || 1; 
+                translateX = stateOrBoardData.translateX || 0; 
+                translateY = stateOrBoardData.translateY || 0;
             }
-        }
-        
-        // MANIFEST: New function to load session from IndexedDB
-        async function loadSessionFromDB() {
-            showLoading(true);
-            try {
-                const savedSession = await dbManager.get(dbManager.SESSIONS_STORE, SESSION_KEY);
-                if (savedSession && savedSession.data) {
-                    await executeClearCanvas(false); // Clear current state before loading
-                    await loadState(savedSession, false); // fromUndoRedo=false to load history too
-                    isDirty = false; // Freshly loaded session is not dirty
-                    showMessage("Session loaded from browser.", 2000);
-                } else {
-                    showMessage("No saved session found in browser.", 3000);
-                }
-            } catch (error) {
-                console.error("Error loading session from DB:", error);
-                showMessage("An error occurred while loading the session.", 4000);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-
-		async function loadState(stateOrBoardData, fromUndoRedo = false) {
-            showLoading(true);
-            const data = stateOrBoardData.data || stateOrBoardData;
-
-            scale = data.scale || (data.transform ? data.transform.scale : 1);
-            translateX = data.translateX || (data.transform ? data.transform.translateX : 0);
-            translateY = data.translateY || (data.transform ? data.transform.translateY : 0);
-            canvasBackgroundColor = data.canvasBackgroundColor || '#ffffff';
-            connectionLineColor = data.connectionLineColor || '#4A5568';
-            radialGuideLineColor = data.radialGuideLineColor || getComputedRadialGuideColor();
-            showRadialGuide = data.showRadialGuide || false;
-            radialGuideCoreItemId = data.radialGuideCoreItemId || null;
-            
-            bgColorPicker.value = canvasBackgroundColor;
+            canvasBackgroundColor = stateOrBoardData.canvasBackgroundColor || '#ffffff'; 
+            bgColorPicker.value = canvasBackgroundColor; 
             canvas.style.backgroundColor = canvasBackgroundColor;
+            connectionLineColor = stateOrBoardData.connectionLineColor || '#4A5568'; 
             arrowColorPicker.value = connectionLineColor;
-            applyTheme(data.currentTheme || 'Default', false);
+            
+            const themeToApply = stateOrBoardData.currentTheme || 'Default';
+            applyTheme(themeToApply, false); // applyTheme now handles not saving to history
 
-            connections = data.connections ? JSON.parse(JSON.stringify(data.connections)) : [];
-            
-            const leanItems = data.items || [];
-            
-            const assetFetchPromises = leanItems
-                .filter(item => ['image', 'audio', 'video'].includes(item.type))
-                .map(item => dbManager.get(dbManager.ASSETS_STORE, item.id).catch(e => {
-                    console.error(`Failed to fetch asset ${item.id}`, e);
-                    return null;
-                }));
-            
-            const fetchedAssets = await Promise.all(assetFetchPromises);
-            
-            const assetMap = new Map();
-            fetchedAssets.forEach(asset => {
-                if(asset) assetMap.set(asset.id, asset.data);
-            });
-            
-            const newItemPromises = leanItems.map(async (itemData) => {
-                let loadedItem = { ...itemData };
-                if (['image', 'audio', 'video'].includes(itemData.type)) {
-                    let assetData = assetMap.get(itemData.id);
-                    // Fallback for loading from JSON file
-                    if (!assetData && itemData.src) { 
-                        assetData = itemData.src;
-                        // Store the asset in DB if it's from a file load
-                        await dbManager.set(dbManager.ASSETS_STORE, { id: itemData.id, data: assetData }).catch(console.error);
+            radialGuideLineColor = stateOrBoardData.radialGuideLineColor || getComputedRadialGuideColor();
+            connections = (stateOrBoardData.connections ? JSON.parse(JSON.stringify(stateOrBoardData.connections)) : [])
+                            .map(conn => ({ ...conn, lineStyle: conn.lineStyle || 'solid' }));
+            const newItems = [];
+            if (stateOrBoardData.items) { 
+                for (const itemData of stateOrBoardData.items) { 
+                    try {
+                        let loadedItem = { ...itemData };
+                        if (itemData.type === 'image' && itemData.src) { 
+                            const img = await loadImagePromise(itemData.src);
+                            loadedItem.img = img;
+                            loadedItem.borderColor = itemData.borderColor || '#000000';
+                            loadedItem.borderWidth = typeof itemData.borderWidth === 'number' ? itemData.borderWidth : 0;
+                            loadedItem.isCoreStar = itemData.isCoreStar || false;
+                            loadedItem.isEndNode = itemData.isEndNode || false;
+                        } else if (itemData.type === 'audio' || itemData.type === 'video') {
+                            loadedItem.width = itemData.width || DEFAULT_AUDIO_VIDEO_WIDTH;
+                            loadedItem.height = itemData.height || DEFAULT_AUDIO_VIDEO_HEIGHT;
+                            loadedItem.originalWidth = itemData.originalWidth || loadedItem.width;
+                            loadedItem.originalHeight = itemData.originalHeight || loadedItem.height;
+                        } else if (itemData.type === 'textNode') { 
+                            loadedItem.fontSize = itemData.fontSize || 16;
+                            loadedItem.fontFamily = itemData.fontFamily || "'Inter', sans-serif"; 
+                            loadedItem.color = itemData.color || '#000000';
+                            loadedItem.backgroundColor = itemData.backgroundColor || 'rgba(255,255,255,0.7)';
+                            loadedItem.width = itemData.width || DEFAULT_TEXT_NODE_WIDTH;
+                        } else if (itemData.type === 'scentCard') {
+                        }
+                        if (itemData.annotation) {
+                            loadedItem.annotation = {
+                                ...itemData.annotation,
+                                fontFamily: itemData.annotation.fontFamily || "'Inter', sans-serif",
+                                position: (itemData.type === 'image' && itemData.annotation.position) ? itemData.annotation.position : 'bottom'
+                            };
+                        } else {
+                            loadedItem.annotation = null;
+                        }
+                        loadedItem.createdAt = itemData.createdAt || new Date().toISOString();
+                        newItems.push(loadedItem);
+                    } catch (error) { 
+                        console.error("Error processing item during state load:", itemData, error); 
+                        showMessage("Error loading an item during restoration."); 
                     }
-                    if (assetData) {
-                         loadedItem.img = await loadImagePromise(assetData);
-                    }
-                }
-                if (itemData.annotation) {
-                    loadedItem.annotation = { ...itemData.annotation };
-                }
-                return loadedItem;
-            });
-
-            items = await Promise.all(newItemPromises);
-            selectedItem = null;
-
-            if (!fromUndoRedo) {
-                history = data.history || [];
-                redoStack = data.redoStack || [];
-                if (history.length === 0) {
-                    const { history: _h, redoStack: _r, ...currentCanvasState } = data;
-                    history.push(currentCanvasState);
-                    redoStack = [];
                 }
             }
-            
+            items = newItems; 
+            selectedItem = null;
+            showRadialGuide = stateOrBoardData.showRadialGuide || false;
+            radialGuideCoreItemId = stateOrBoardData.radialGuideCoreItemId || null;
+            if (showRadialGuide && radialGuideCoreItemId) {
+                const guideCore = items.find(item => item.id === radialGuideCoreItemId);
+                if (!guideCore || guideCore.type !== 'image' || !guideCore.isCoreStar) {
+                    showRadialGuide = false;
+                    radialGuideCoreItemId = null;
+                }
+            } else { 
+                 showRadialGuide = false;
+                 radialGuideCoreItemId = null;
+            }
             showLoading(false); 
             draw(); 
             updateUndoRedoButtons(); 
@@ -2669,23 +2544,19 @@
 
         function undo() { 
             if (history.length > 1) {
-                isDirty = true;
                 const currentState = history.pop(); 
                 redoStack.push(currentState); 
                 const prevState = history[history.length - 1]; 
-                loadState(prevState, true);
+                loadState(JSON.parse(JSON.stringify(prevState)));
             } 
         }
-
         function redo() { 
             if (redoStack.length > 0) { 
-                isDirty = true;
                 const nextState = redoStack.pop(); 
                 history.push(nextState); 
-                loadState(nextState, true);
+                loadState(JSON.parse(JSON.stringify(nextState)));
             } 
         }
-        
         function updateUndoRedoButtons() { 
             undoBtn.classList.toggle('disabled', history.length <= 1); 
             undoBtn.disabled = history.length <= 1; 
@@ -2693,7 +2564,7 @@
             redoBtn.disabled = redoStack.length === 0; 
         }
 
-        // --- UTILITY FUNCTIONS (omitted for brevity, same as original) ---
+        // --- General Helpers ---
         function generateUniqueId(prefix = 'id') {
             return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         }
@@ -2811,14 +2682,6 @@
             return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)); 
         }
 
-        // MANIFEST: Renamed debouncedSaveState to debouncedUpdateHistory
-		function debouncedUpdateHistory() {
-            clearTimeout(zoomDebounceTimeout);
-            zoomDebounceTimeout = setTimeout(() => {
-                updateHistory();
-            }, 400);
-        }
-
         function showLoading(show) { 
             loadingSpinner.style.display = show ? 'block' : 'none'; 
         }
@@ -2838,17 +2701,18 @@
             return modals.some(modal => modal && (modal.style.display === MODAL_DISPLAY_BLOCK || modal.style.display === MODAL_DISPLAY_FLEX));
         }
 
+        // --- File & Board Operations ---
         function handleBgColorChange(e) {
             canvasBackgroundColor = e.target.value;
             canvas.style.backgroundColor = canvasBackgroundColor;
             updateRadialGuideColor();
-            updateHistory();
+            saveState();
             draw();
         }
 
         function handleArrowColorChange(e) { 
             connectionLineColor = e.target.value; 
-            updateHistory(); 
+            saveState(); 
             draw(); 
         }
         
@@ -2883,57 +2747,37 @@
             updateButtonStates(); 
         }
         
-        async function saveBoardAsJson() {
-            showLoading(true);
-            try {
-                const leanItems = items.map(item => { const { img, ...lean } = item; return lean; });
-                
-                const assetPromises = leanItems
-                    .filter(item => ['image', 'audio', 'video'].includes(item.type))
-                    .map(item => dbManager.get(dbManager.ASSETS_STORE, item.id));
-                
-                const fetchedAssets = await Promise.all(assetPromises);
-
-                const assetMap = new Map();
-                fetchedAssets.forEach(asset => {
-                    if (asset) assetMap.set(asset.id, asset.data);
-                });
-
-                const boardData = { 
-                    items: leanItems.map(item => { 
-                        if (assetMap.has(item.id)) {
-                            return { ...item, src: assetMap.get(item.id) };
-                        }
-                        return item; 
-                    }), 
-                    connections,
-                    transform: { scale, translateX, translateY }, 
-                    canvasBackgroundColor, 
-                    connectionLineColor, 
-                    radialGuideLineColor, 
-                    showRadialGuide,
-                    radialGuideCoreItemId,
-                    currentTheme,
-                    version: "2.0.0"
-                };
-
-                const jsonString = JSON.stringify(boardData, null, 2);
-                const blob = new Blob([jsonString], { type: 'application/json' }); 
-                const url = URL.createObjectURL(blob); 
-                const a = document.createElement('a'); 
-                a.href = url; 
-                a.download = `stellary_board_${Date.now()}.json`;
-                document.body.appendChild(a); 
-                a.click(); 
-                document.body.removeChild(a); 
-                URL.revokeObjectURL(url); 
-                showMessage("Stellary board saved as JSON."); 
-            } catch (error) {
-                console.error("Error saving board to JSON:", error);
-                showMessage("Could not save the board. See console for details.");
-            } finally {
-                showLoading(false);
-            }
+        function saveBoardAsJson() { 
+            const boardData = { 
+                items: items.map(item => { 
+                    let savedItem = { ...item };
+                    if (item.type === 'image' && item.img) { 
+                        const { img, ...rest } = item;
+                        savedItem = { ...rest, src: item.src };
+                    }
+                    return savedItem; 
+                }), 
+                connections: connections.map(conn => ({...conn})),
+                transform: { scale: scale, translateX: translateX, translateY: translateY }, 
+                canvasBackgroundColor: canvasBackgroundColor, 
+                connectionLineColor: connectionLineColor, 
+                radialGuideLineColor: radialGuideLineColor, 
+                showRadialGuide: showRadialGuide,
+                radialGuideCoreItemId: radialGuideCoreItemId,
+                currentTheme: currentTheme,
+                version: "1.8.0"
+            }; 
+            const jsonString = JSON.stringify(boardData, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' }); 
+            const url = URL.createObjectURL(blob); 
+            const a = document.createElement('a'); 
+            a.href = url; 
+            a.download = `stellary_board_${Date.now()}.json`;
+            document.body.appendChild(a); 
+            a.click(); 
+            document.body.removeChild(a); 
+            URL.revokeObjectURL(url); 
+            showMessage("Stellary board saved as JSON."); 
         }
         
         async function loadBoardFromJson(e) { 
@@ -2944,13 +2788,33 @@
             reader.onload = async (event) => { 
                 try { 
                     const boardData = JSON.parse(event.target.result); 
-                    if (!boardData.items) {
+                    if (!boardData.items || (!boardData.transform && typeof boardData.scale === 'undefined')) {
                         throw new Error("Invalid JSON format for Stellary board."); 
                     } 
-                    await executeClearCanvas(false);
-                    await loadState(boardData, false);
-                    isDirty = true; // Loaded from a file, so it's unsaved in the browser session
-                    showMessage("Stellary board loaded successfully. Remember to 'Save Session' to keep it in the browser."); 
+                    await loadState(boardData); 
+                    history = []; 
+                    redoStack = []; 
+                    const currentLoadedStateForHistory = { 
+                        items: JSON.parse(JSON.stringify(items.map(item => { 
+                            let itemCopy = { ...item }; 
+                            if (item.type === 'image' && item.img) { 
+                                const { img, ...rest } = itemCopy; 
+                                itemCopy = rest; itemCopy.src = item.img.src; 
+                            } 
+                            return itemCopy; 
+                        }))), 
+                        connections: JSON.parse(JSON.stringify(connections)), 
+                        scale: scale, translateX: translateX, translateY: translateY, 
+                        canvasBackgroundColor: canvasBackgroundColor, 
+                        connectionLineColor: connectionLineColor, 
+                        radialGuideLineColor: radialGuideLineColor, 
+                        showRadialGuide: showRadialGuide, 
+                        radialGuideCoreItemId: radialGuideCoreItemId,
+                        currentTheme: currentTheme
+                    }; 
+                    history.push(currentLoadedStateForHistory); 
+                    updateUndoRedoButtons(); 
+                    showMessage("Stellary board loaded successfully."); 
                 } catch (error) { 
                     console.error("Error loading JSON:", error); 
                     showMessage(`Failed to load board: ${error.message}`); 
@@ -2969,23 +2833,22 @@
                 img.onload = () => resolve(img); 
                 img.onerror = (err) => { 
                     console.error("loadImagePromise failed for src:", src, err); 
-                    const placeholder = new Image();
-                    placeholder.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' font-family='sans-serif' font-size='12' fill='%23888' text-anchor='middle' dy='.3em'%3EError%3C/text%3E%3C/svg%3E";
-                    placeholder.onload = () => resolve(placeholder);
+                    reject(new Error(`Failed to load image: ${src.substring(0, 50)}...`)); 
                 }; 
                 img.src = src; 
             }); 
         }
         
-        async function exportBoardAsPng() { 
+        function exportBoardAsPng() { 
             showLoading(true); 
             try { 
                 const exportCanvas = document.createElement('canvas'); 
                 const exportCtx = exportCanvas.getContext('2d'); 
                 let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity; 
-                if (items.length === 0) { 
-                    exportCanvas.width = 100; exportCanvas.height = 100;
-                    minX = 0; minY = 0; maxX = 100; maxY = 100;
+                if (items.length === 0 && connections.length === 0) { 
+                    exportCanvas.width = canvas.width / scale; 
+                    exportCanvas.height = canvas.height / scale;
+                    minX = 0; minY = 0;
                 } else { 
                     items.forEach(item => { 
                         let itemMinX = item.x; 
@@ -3026,18 +2889,15 @@
                 exportCanvas.height = (maxY - minY) + 2 * padding;
                 exportCtx.fillStyle = canvasBackgroundColor; 
                 exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height); 
-                exportCtx.save();
-                exportCtx.translate(-minX + padding, -minY + padding); 
-
-                const sortedItems = [...items].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)); 
-                
-                // Draw connections first
+                if (items.length > 0 || connections.length > 0) { 
+                    exportCtx.translate(-minX + padding, -minY + padding); 
+                } 
                 exportCtx.strokeStyle = connectionLineColor; 
                 exportCtx.fillStyle = connectionLineColor; 
                 exportCtx.lineWidth = 2; 
                 connections.forEach(conn => { 
-                    const fromItem = sortedItems.find(item => item.id === conn.fromId); 
-                    const toItem = sortedItems.find(item => item.id === conn.toId);
+                    const fromItem = items.find(item => item.id === conn.fromId); 
+                    const toItem = items.find(item => item.id === conn.toId);
                     if (fromItem && toItem) {
                         const startPoint = getIntersectionWithRectBorder(fromItem, toItem); 
                         const endPoint = getIntersectionWithRectBorder(toItem, fromItem);
@@ -3054,45 +2914,186 @@
                         }
                     }
                 }); 
+                const sortedItems = [...items].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)); 
+                sortedItems.forEach(item => {
+                    if (item.type === 'image' && item.img && item.img.complete) { 
+                        const originalShadowColor = exportCtx.shadowColor; const originalShadowBlur = exportCtx.shadowBlur; 
+                        if (item.isCoreStar) { exportCtx.shadowColor = 'rgba(255, 215, 0, 0.6)'; exportCtx.shadowBlur = 20; } 
+                        else if (item.isEndNode) { exportCtx.shadowColor = 'rgba(66, 153, 225, 0.7)'; exportCtx.shadowBlur = 20;} 
+                        try { 
+                            exportCtx.drawImage(item.img, item.x, item.y, item.width, item.height); 
+                        } catch (e) { 
+                            console.error("Error drawing image to export canvas (CORS taint?):", item.src, e); 
+                            exportCtx.fillStyle = 'red';
+                            exportCtx.fillRect(item.x, item.y, item.width, item.height);
+                            exportCtx.fillStyle = 'white'; exportCtx.fillText("ERR", item.x + 10, item.y + 20);
+                        }
+                        if (item.isCoreStar || item.isEndNode) { exportCtx.shadowColor = originalShadowColor; exportCtx.shadowBlur = originalShadowBlur; } 
+                        if (item.borderWidth && item.borderWidth > 0) { 
+                            exportCtx.strokeStyle = item.borderColor || '#000000'; 
+                            exportCtx.lineWidth = item.borderWidth; 
+                            exportCtx.strokeRect(item.x, item.y, item.width, item.height); 
+                        } 
+                        if (item.isCoreStar) {
+                            exportCtx.strokeStyle = 'rgba(255, 215, 0, 0.9)'; exportCtx.lineWidth = 3 + (item.borderWidth > 0 ? 1: 0);
+                            exportCtx.strokeRect(item.x - 1, item.y - 1, item.width + 2, item.height + 2);
+                        } else if (item.isEndNode) {
+                            exportCtx.strokeStyle = 'rgba(30, 144, 255, 0.9)'; exportCtx.lineWidth = 3 + (item.borderWidth > 0 ? 1: 0);
+                            exportCtx.strokeRect(item.x - 1, item.y - 1, item.width + 2, item.height + 2);
+                        }
+                    } else if (item.type === 'image' && item.img && !item.img.complete) { 
+                        console.warn("Skipping non-complete image during export:", item.src); 
+                    } else if (item.type === 'audio' || item.type === 'video') {
+                         exportCtx.fillStyle = '#E9EDF0'; exportCtx.strokeStyle = '#B0BFCB'; exportCtx.lineWidth = 1;
+                         exportCtx.beginPath();
+                         if (exportCtx.roundRect) { exportCtx.roundRect(item.x, item.y, item.width, item.height, [8]); } else { exportCtx.rect(item.x, item.y, item.width, item.height); }
+                         exportCtx.fill(); exportCtx.stroke();
+                         let targetIcon = item.type === 'audio' ? audioIconImg : videoIconImg;
+                         let iconLoadedFlag = item.type === 'audio' ? audioIconLoaded : videoIconLoaded;
+                         if (iconLoadedFlag && targetIcon.complete && targetIcon.naturalWidth > 0) {
+                            try {
+                                const iconPadding = Math.min(item.width, item.height) * 0.2; 
+                                const iconContentWidth = item.width - 2 * iconPadding;
+                                const iconContentHeight = item.height - 2 * iconPadding;
+                                const iconAspect = targetIcon.naturalWidth / targetIcon.naturalHeight;
+                                let drawWidth = iconContentWidth;
+                                let drawHeight = iconContentWidth / iconAspect;
+                                if (drawHeight > iconContentHeight) {
+                                    drawHeight = iconContentHeight;
+                                    drawWidth = iconContentHeight * iconAspect;
+                                }
+                                if (drawWidth > iconContentWidth) { 
+                                    drawWidth = iconContentWidth;
+                                    drawHeight = iconContentWidth / iconAspect;
+                                }
+                                const drawX = item.x + (item.width - drawWidth) / 2;
+                                const drawY = item.y + (item.height - drawHeight) / 2;
+                                exportCtx.drawImage(targetIcon, drawX, drawY, drawWidth, drawHeight);
+                            }
+                            catch(e) { console.error("Error drawing icon to export (CORS?):", e); }
+                         } else {
+                            exportCtx.fillStyle = '#334155';
+                            const iconTextFontSize = Math.min(item.width, item.height) * 0.2;
+                            exportCtx.font = `${iconTextFontSize}px Inter, sans-serif`;
+                            exportCtx.textAlign = 'center';
+                            exportCtx.textBaseline = 'middle';
+                            exportCtx.fillText(item.type.charAt(0).toUpperCase() + item.type.slice(1), item.x + item.width / 2, item.y + item.height / 2);
+                         }
+                    } else if (item.type === 'textNode') { 
+                        exportCtx.font = `${item.fontSize}px ${item.fontFamily || "'Inter', sans-serif"}`; 
+                        exportCtx.fillStyle = item.backgroundColor || 'rgba(255,255,255,0.7)';
+                        exportCtx.fillRect(item.x, item.y, item.width, item.height);
+                        exportCtx.strokeStyle = '#cccccc'; exportCtx.lineWidth = 1;
+                        exportCtx.strokeRect(item.x, item.y, item.width, item.height);
+                        exportCtx.fillStyle = item.color || '#000000';
+                        exportCtx.textAlign = 'left'; exportCtx.textBaseline = 'top';
+                        wrapText(exportCtx, item.text, item.x + 5, item.y + 5, item.width - 10, item.fontSize, true);
+                    } else if (item.type === 'scentCard') { 
+                        const familyColors = {
+                           "Floral": { bg: 'rgba(253, 230, 241, 1)', border: '#f9a8d4' }, 
+                           "Woody": { bg: 'rgba(254, 249, 195, 1)', border: '#fde047' }, 
+                           "Fresh": { bg: 'rgba(220, 252, 231, 1)', border: '#86efac' }, 
+                           "Warm / Spiced": { bg: 'rgba(254, 226, 226, 1)', border: '#fca5a5' }, 
+                           "Atmospheric & Elemental": { bg: 'rgba(219, 234, 254, 1)', border: '#93c5fd' }, 
+                           "default": { bg: 'rgba(243, 244, 246, 1)', border: '#d1d5db' } 
+                        };
+                        const colors = familyColors[item.scentData.family] || familyColors.default;
+                        exportCtx.fillStyle = colors.bg;
+                        exportCtx.strokeStyle = colors.border;
+                        exportCtx.lineWidth = 1.5;
+                        exportCtx.beginPath();
+                        if (exportCtx.roundRect) { exportCtx.roundRect(item.x, item.y, item.width, item.height, [8]); } else { exportCtx.rect(item.x, item.y, item.width, item.height); }
+                        exportCtx.fill();
+                        exportCtx.stroke();
 
-                // Draw items and annotations
-                for (const item of sortedItems) {
-                    drawItem.call({ctx: exportCtx}, item); // Use call to set context for drawing functions
+                        exportCtx.textAlign = 'center';
+                        exportCtx.textBaseline = 'top'; 
+                        const worldTextPadding = 10; 
+                        const baseFontSizeTerm = 16; 
+                        const baseFontSizeDesc = 12; 
+                        exportCtx.fillStyle = '#1f2937'; 
+                        exportCtx.font = `italic bold ${baseFontSizeTerm}px 'Georgia', serif`; 
+                        const termDrawY = item.y + worldTextPadding;
+                        const textMaxWidth = item.width - 2 * worldTextPadding;
+                        const termLines = wrapText(exportCtx, `"${item.scentData.term}"`, item.x + item.width / 2, termDrawY, textMaxWidth, baseFontSizeTerm, true);
+                        exportCtx.fillStyle = '#374151'; 
+                        exportCtx.font = `${baseFontSizeDesc}px 'Inter', sans-serif`; 
+                        const descDrawY = termDrawY + (termLines.length * baseFontSizeTerm * 1.2) + (worldTextPadding / 2); 
+                        wrapText(exportCtx, item.scentData.desc, item.x + item.width / 2, descDrawY, textMaxWidth, baseFontSizeDesc, true);
+                    }
                     if (item.annotation && item.annotation.text) { 
-                       drawAnnotation.call({ctx: exportCtx}, item);
+                        exportCtx.font = `${item.annotation.fontSize}px ${item.annotation.fontFamily || "'Inter', sans-serif"}`; 
+                        exportCtx.fillStyle = item.annotation.color || '#000000';
+                        const textMargin = 5; 
+                        const lineHeightFactor = 1.2; 
+                        const currentLineHeight = item.annotation.fontSize * lineHeightFactor; 
+                        let textDrawX, textDrawY; 
+                        let currentTextAlign = 'center'; 
+                        let currentWrapMaxWidth = item.width; 
+                        const position = (item.type === 'image' && item.annotation.position) ? item.annotation.position : 'bottom';
+                        const tempLinesForHeight = wrapText(exportCtx, item.annotation.text, 0, 0, item.width, item.annotation.fontSize, false);
+                        const totalTextHeight = (tempLinesForHeight.length * currentLineHeight) - (tempLinesForHeight.length > 0 ? item.annotation.fontSize * (lineHeightFactor - 1) : 0) ; 
+                        if (position === 'top') { 
+                            currentTextAlign = 'center'; 
+                            textDrawX = item.x + item.width / 2; 
+                            textDrawY = item.y - textMargin - totalTextHeight;
+                        } else if (position === 'left') { 
+                            currentTextAlign = 'right'; 
+                            currentWrapMaxWidth = Math.max(item.width / 1.5, 80); 
+                            const sideLines = wrapText(exportCtx, item.annotation.text, 0, 0, currentWrapMaxWidth, item.annotation.fontSize, false); 
+                            const sideTextHeight = (sideLines.length * currentLineHeight) - (sideLines.length > 0 ? item.annotation.fontSize * (lineHeightFactor - 1) : 0); 
+                            textDrawX = item.x - textMargin; 
+                            textDrawY = item.y + (item.height / 2) - (sideTextHeight / 2);
+                        } else if (position === 'right') { 
+                            currentTextAlign = 'left'; 
+                            currentWrapMaxWidth = Math.max(item.width / 1.5, 80); 
+                            const sideLines = wrapText(exportCtx, item.annotation.text, 0, 0, currentWrapMaxWidth, item.annotation.fontSize, false); 
+                            const sideTextHeight = (sideLines.length * currentLineHeight) - (sideLines.length > 0 ? item.annotation.fontSize * (lineHeightFactor - 1) : 0); 
+                            textDrawX = item.x + item.width + textMargin; 
+                            textDrawY = item.y + (item.height / 2) - (sideTextHeight / 2);
+                        } else {
+                            currentTextAlign = 'center'; 
+                            textDrawX = item.x + item.width / 2; 
+                            textDrawY = item.y + item.height + textMargin; 
+                        }
+                        exportCtx.textAlign = currentTextAlign; 
+                        exportCtx.textBaseline = 'top'; 
+                        wrapText(exportCtx, item.annotation.text, textDrawX, textDrawY, currentWrapMaxWidth, item.annotation.fontSize, true);
                     } 
-                }
-                exportCtx.restore();
-
+                }); 
                 try {
                     const dataUrl = exportCanvas.toDataURL('image/png'); 
+                    if (dataUrl === "data:,") { 
+                        showMessage("Export failed: Could not generate image. This might be due to external icon loading issues (CORS).", 7000); 
+                        showLoading(false); return; 
+                    } 
                     exportedImage.src = dataUrl; 
                     exportPngModal.style.display = MODAL_DISPLAY_BLOCK; 
                 } catch (e) { 
-                    console.error("Error calling toDataURL:", e);
-                    showMessage("Export failed. See console for details.", 5000);
+                    console.error("Error calling toDataURL (likely canvas taint from external icons):", e);
+                    showMessage("Export failed: Canvas is tainted, possibly by external icons. Try using local or Base64 encoded icons for reliable export.", 7000);
+                } finally {
+                    showLoading(false); 
                 }
             } catch (error) { 
                 console.error("Error in exportBoardAsPng:", error); 
                 showMessage("Failed to export board as PNG. Check console for details.", 5000); 
-            } finally {
                 showLoading(false); 
-            }
+            } 
         }
         
-        async function executeClearCanvas(showConfirmation = true) {
-            const clearActions = async () => {
-                await clearSavedSession();
-                startNewSession();
-                showMessage("Canvas cleared.");
-            };
-
-            if (showConfirmation) {
-                 confirmClearConstellationModal.style.display = 'none';
-                 await clearActions();
-            } else {
-                 await clearActions();
-            }
+        // --- Modal & UI Interaction ---
+        function executeClearCanvas() {
+            confirmClearConstellationModal.style.display = 'none'; 
+            items = [];
+            connections = [];
+            selectedItem = null;
+            showRadialGuide = false; 
+            radialGuideCoreItemId = null;
+            saveState();
+            draw();
+            updateButtonStates();
+            showMessage("Canvas cleared.");
         }
 
         function openHelpModal() { 
@@ -3129,9 +3130,7 @@
                     <li><strong>Interact:</strong> Single-click/tap to select. Double-click/tap media to play. Drag to move. Resize items with corner handles.</li>
                     <li><strong>Style & Annotate:</strong> Select an item and click <i class="fas fa-comment-dots"></i> (or press 'A') to add text and change styles.</li>
                     <li><strong>Connect:</strong> Use the <i class="fas fa-link"></i> button (or press 'C') to draw connections.</li>
-                    <!-- MANIFEST: Help text for saving updated -->
-                    <li><strong>Save/Load:</strong> Use "Save Session" (<i class="fas fa-save"></i>) to store your work in the browser. Use "Load Session" (<i class="fas fa-folder-open"></i>) to retrieve it. This is separate from saving/loading files to your device (<i class="fas fa-download"></i> / <i class="fas fa-upload"></i>).</li>
-                    <li><strong>Export:</strong> Save a final image of your work using the PNG (<i class="fas fa-file-export"></i>) button.</li>
+                    <li><strong>Save & Export:</strong> Save your work (<i class="fas fa-download"></i>) and load it (<i class="fas fa-upload"></i>) later. Export a final image via the PNG (<i class="fas fa-file-export"></i>) button.</li>
                 </ul>
 
                 <h4 class="text-lg font-semibold mt-3 mb-1">When to Use Stellary:</h4>
@@ -3153,8 +3152,8 @@
                         <li><strong class="w-28 inline-block">Delete/Backspace</strong> Delete Selected Item</li>
                         <li><strong class="w-28 inline-block">Ctrl/Cmd + Z</strong> Undo</li>
                         <li><strong class="w-28 inline-block">Ctrl/Cmd + Y</strong> Redo</li>
-                        <li><strong class="w-28 inline-block">Ctrl/Cmd + S</strong> Save to Device (File)</li>
-                        <li><strong class="w-28 inline-block">Ctrl/Cmd + O</strong> Load from Device (File)</li>
+                        <li><strong class="w-28 inline-block">Ctrl/Cmd + S</strong> Save to Device</li>
+                        <li><strong class="w-28 inline-block">Ctrl/Cmd + O</strong> Load from Device</li>
                         <li><strong class="w-28 inline-block">+/-</strong> Zoom In/Out</li>
                         <li><strong class="w-28 inline-block">0</strong> Reset View</li>
                         <li><strong class="w-28 inline-block">Esc</strong> Close modals or deselect item</li>
@@ -3167,53 +3166,28 @@
                 </div>
 
                 <div class="mt-4 pt-3 border-t">
-                    <h4 class="text-lg font-semibold mt-1 mb-2">Usage, Licensing & Support</h4>
-                    <p class="mb-2"><strong>Free for Personal &amp; Private Use:</strong><br>Stellary is free for personal, non-commercial use, such as for private journaling, self-reflection, or creating personal memory maps. If you find it valuable for these purposes, please consider making a donation to support its continued development.</p>
-                    
-                    <p class="mb-2"><strong>License Required for Professional &amp; Institutional Use:</strong><br>As a professional tool, a license is required for all other uses. This includes, but is not limited to:
-                        <ul class="list-disc list-inside ml-4 mt-1">
-                            <li>Use within therapeutic, coaching, or clinical practices with clients.</li>
-                            <li>Use for commercial creative projects (e.g., brand storytelling, client mood boards).</li>
-                            <li>Use in formal academic or educational workshop settings.</li>
-                        </ul>
-                    </p>
-                    
-                    <p class="mb-2">
-                        <strong>Contact:</strong> <a href="mailto:hello@thorstenbecker.de" class="text-blue-500 hover:underline">hello@thorstenbecker.de</a>
-                    </p>
-                    <p class="mt-2">
-                        <a href="https://ko-fi.com/thorstenbecker" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-semibold">
-                           Donate for Personal Use via Ko-fi
-                        </a>
-                    </p>
-                    <p class="mt-4 text-gray-500 text-xs">Copyright &copy; <span id="help-copyright-year">2025</span> <a href="https://www.thorstenbecker.de" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Thorsten Becker</a>. All rights reserved.</p>
+                    <h4 class="text-lg font-semibold mt-1 mb-2">License & Support</h4>
+                    <p class="mb-2">Personal use of Stellary is free. If you find it valuable, please consider making a small donation to support development. Your support is greatly appreciated! <a href="https://ko-fi.com/thorstenbecker" target="_blank" rel="noopener noreferrer" class="text-pink-500 hover:underline font-semibold">Donate here</a>.</p>
+                    <p class="mb-2">Any other use (commercial, institutional, educational, etc.) requires a license. Please contact me at <a href="mailto:hello@thorstenbecker.de" class="text-blue-500 hover:underline">hello@thorstenbecker.de</a> for inquiries.</p>
+                    <p class="mt-4 text-gray-500 text-xs">Copyright &copy; 2025 <a href="https://www.thorstenbecker.de" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">Thorsten Becker</a>. All rights reserved.</p>
                 </div>
             `;
         }
         
-        async function openPlaybackModal(item) {
+        function openPlaybackModal(item) {
             if (!item || (item.type !== 'audio' && item.type !== 'video')) return;
             playbackContainer.innerHTML = '';
-            
-            try {
-                const asset = await dbManager.get(dbManager.ASSETS_STORE, item.id);
-                if (!asset || !asset.data) throw new Error("Asset not found in DB");
-
-                let mediaElement;
-                if (item.type === 'audio') {
-                    mediaElement = document.createElement('audio');
-                } else {
-                    mediaElement = document.createElement('video');
-                }
-                mediaElement.controls = true;
-                mediaElement.autoplay = true;
-                mediaElement.src = asset.data;
-                playbackContainer.appendChild(mediaElement);
-                playbackModal.style.display = MODAL_DISPLAY_BLOCK;
-            } catch(e) {
-                console.error("Could not play media:", e);
-                showMessage("Could not load media file for playback.");
+            let mediaElement;
+            if (item.type === 'audio') {
+                mediaElement = document.createElement('audio');
+            } else {
+                mediaElement = document.createElement('video');
             }
+            mediaElement.controls = true;
+            mediaElement.autoplay = true;
+            mediaElement.src = item.src;
+            playbackContainer.appendChild(mediaElement);
+            playbackModal.style.display = MODAL_DISPLAY_BLOCK;
         }
 
         function closePlaybackModal() {
@@ -3221,6 +3195,7 @@
             playbackModal.style.display = 'none';
         }
 
+        // --- Keyboard Shortcuts & Window Events ---
         function handleKeyDown(e) { 
             const activeElement = document.activeElement; 
             const isInputFocused = activeElement && 
@@ -3275,13 +3250,13 @@
                 if (key === 'arrowdown') dy = NUDGE_AMOUNT;
                 selectedItem.x += dx;
                 selectedItem.y += dy;
-                updateHistory();
+                saveState();
                 draw();
                 actionPerformed = true;
             } else if (key === '+' || key === '=') { 
-                zoomCanvas(1.2); updateHistory(); actionPerformed = true; 
+                zoomCanvas(1.2); saveState(); actionPerformed = true; 
             } else if (key === '-') {
-                zoomCanvas(0.8); updateHistory(); actionPerformed = true; 
+                zoomCanvas(0.8); saveState(); actionPerformed = true; 
             } else if (key === '0') {
                 resetView(); actionPerformed = true; 
             } else if (key === 'escape') {
@@ -3297,17 +3272,15 @@
             } 
         }
 
-        // MANIFEST: Updated to use the isDirty flag.
         function handleBeforeUnload(e) { 
-            if (isDirty) { 
-                const message = 'You have unsaved changes. Are you sure you want to leave?';
+            if (history.length > 1) { 
                 e.preventDefault(); 
-                e.returnValue = message; 
-                return message;
+                e.returnValue = ''; 
+                return '';
             } 
         }
 
-        // --- SCENT LEXICON FUNCTIONS (omitted for brevity, same as original) ---
+        // --- Scent Card Functions ---
         function openScentModal() {
             scentLexiconModal.style.display = MODAL_DISPLAY_BLOCK;
             populateScentFilter();
@@ -3345,11 +3318,11 @@
                     if (scent.term.toLowerCase().includes(searchTerm) || scent.desc.toLowerCase().includes(searchTerm)) {
                         const card = document.createElement('div');
                         const currentFamilyColors = familyColors[family] || familyColors.default;
-                        card.className = `p-3 mb-2 border rounded-md cursor-pointer hover:shadow-md transition-shadow ${currentFamilyColors.border}`; 
+                        card.className = `scent-card ${currentFamilyColors.border}`; 
                         card.innerHTML = `
-                            <div class="font-semibold italic text-gray-800">"${scent.term}"</div>
-                            <div class="text-sm text-gray-600 mt-1 mb-2">${scent.desc}</div>
-                            <div class="text-xs font-medium inline-block px-2 py-1 rounded-full ${currentFamilyColors.bg} ${currentFamilyColors.text}">${family}</div>
+                            <div class="scent-term">${scent.term}</div>
+                            <div class="scent-desc">${scent.desc}</div>
+                            <div class="scent-family ${currentFamilyColors.bg} ${currentFamilyColors.text}">${family}</div>
                         `;
                         card.onclick = () => addScentCardToCanvas(scent, family);
                         scentLexiconResults.appendChild(card);
@@ -3378,12 +3351,13 @@
             selectedItem = newItem;
             scentLexiconModal.style.display = 'none';
             showMessage(`Scent card '${scent.term}' added.`);
-            updateHistory();
+            saveState();
             draw();
             updateButtonStates();
         }
 
-        document.addEventListener('DOMContentLoaded', init);
+        // --- Start the app ---
+        window.addEventListener('load', init);
     </script>
 </body>
 </html>
