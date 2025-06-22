@@ -2135,40 +2135,62 @@
         }
         
         function toggleCoreStar() { 
-            if (selectedItem && selectedItem.type === 'image') { 
-                const wasCoreStar = selectedItem.isCoreStar; 
-                const currentItemId = selectedItem.id;
-                selectedItem.isCoreStar = !selectedItem.isCoreStar; 
-                if (selectedItem.isCoreStar) { 
-                    selectedItem.isEndNode = false;
-                    showMessage(`Image marked as Core Star.`); 
-                } else { 
-                    showMessage(`Image unmarked as Core Star.`); 
-                    if (wasCoreStar && radialGuideCoreItemId === currentItemId) {
-                        showRadialGuide = false;
-                        radialGuideCoreItemId = null;
-                    }
-                } 
-                saveState(); draw(); updateButtonStates(); 
-            } 
-        }
+			if (selectedItem && selectedItem.type === 'image') { 
+				const isTryingToSet = !selectedItem.isCoreStar;
+				// First, check if we are trying to set a new core star when one already exists.
+				if (isTryingToSet) {
+					const existingCoreStar = items.find(item => item.isCoreStar);
+					if (existingCoreStar) {
+						showMessage("Another item is already the Core Star. Please unmark it first.", 4000);
+						return; // Prevent setting a new one
+					}
+				}
+
+				// --- Original logic can now proceed safely ---
+				const wasCoreStar = selectedItem.isCoreStar; 
+				const currentItemId = selectedItem.id;
+				selectedItem.isCoreStar = !selectedItem.isCoreStar; 
+				if (selectedItem.isCoreStar) { 
+					selectedItem.isEndNode = false;
+					showMessage(`Image marked as Core Star.`); 
+				} else { 
+					showMessage(`Image unmarked as Core Star.`); 
+					if (wasCoreStar && radialGuideCoreItemId === currentItemId) {
+						showRadialGuide = false;
+						radialGuideCoreItemId = null;
+					}
+				} 
+				saveState(); draw(); updateButtonStates(); 
+			} 
+		}
 
         function toggleEndNode() { 
-            if (selectedItem && selectedItem.type === 'image') { 
-                selectedItem.isEndNode = !selectedItem.isEndNode; 
-                if (selectedItem.isEndNode) { 
-                    selectedItem.isCoreStar = false;
-                    showMessage(`Image marked as End Node.`); 
-                    if (radialGuideCoreItemId === selectedItem.id && selectedItem.isCoreStar === false) {
-                        showRadialGuide = false; 
-                        radialGuideCoreItemId = null; 
-                    } 
-                } else { 
-                    showMessage(`Image unmarked as End Node.`); 
-                } 
-                saveState(); draw(); updateButtonStates(); 
-            } 
-        }
+			if (selectedItem && selectedItem.type === 'image') {
+				const isTryingToSet = !selectedItem.isEndNode;
+				// First, check if we are trying to set a new end node when one already exists.
+				if (isTryingToSet) {
+					const existingEndNode = items.find(item => item.isEndNode);
+					if (existingEndNode) {
+						showMessage("Another item is already the End Node. Please unmark it first.", 4000);
+						return; // Prevent setting a new one
+					}
+				}
+
+				// --- Original logic can now proceed safely ---
+				selectedItem.isEndNode = !selectedItem.isEndNode; 
+				if (selectedItem.isEndNode) { 
+					selectedItem.isCoreStar = false;
+					showMessage(`Image marked as End Node.`); 
+					if (radialGuideCoreItemId === selectedItem.id && selectedItem.isCoreStar === false) {
+						showRadialGuide = false; 
+						radialGuideCoreItemId = null; 
+					} 
+				} else { 
+					showMessage(`Image unmarked as End Node.`); 
+				} 
+				saveState(); draw(); updateButtonStates(); 
+			} 
+		}
         
         function changeZIndex(bringToFront) { 
             if (!selectedItem) return; 
