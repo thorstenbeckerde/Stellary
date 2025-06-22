@@ -1235,11 +1235,92 @@
         }
 
         function resetView() {
-            scale = 1;
-            translateX = 0;
-            translateY = 0;
+            if (items.length === 0) {
+                // If the canvas is empty, the original behavior is fine.
+                scale = 1;
+                translateX = 0;
+                translateY = 0;
+                saveState();
+                draw();
+                return;
+            }
+
+            // --- Start of new logic: Find the bounding box of all items ---
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            items.forEach(item => {
+                minX = Math.min(minX, item.x);
+                minY = Math.min(minY, item.y);
+                maxX = Math.max(maxX, item.x + item.width);
+                maxY = Math.max(maxY, item.y + item.height);
+            });
+
+            const contentWidth = maxX - minX;
+            const contentHeight = maxY - minY;
+
+            if (contentWidth === 0 || contentHeight === 0) {
+                // Fallback for single item or zero-dimension content
+                scale = 1;
+                const contentCenterX = items[0].x + items[0].width / 2;
+                const contentCenterY = items[0].y + items[0].height / 2;
+                translateX = (canvas.clientWidth / 2) - (contentCenterX * scale);
+                translateY = (canvas.clientHeight / 2) - (contentCenterY * scale);
+            } else {
+                // --- Center the content and fit it to the screen ---
+                const padding = 50; // pixels of padding around the content
+                const canvasWidth = canvas.clientWidth;
+                const canvasHeight = canvas.clientHeight;
+
+                // Calculate the best scale to fit all content on the screen
+                const scaleX = (canvasWidth - padding * 2) / contentWidth;
+                const scaleY = (canvasHeight - padding * 2) / contentHeight;
+                
+                // Use the smaller scale to ensure everything fits, but don't zoom in too much
+                scale = Math.min(scaleX, scaleY, 1.2); 
+
+                // Now calculate the pan needed to center the content
+                const contentCenterX = minX + contentWidth / 2;
+                const contentCenterY = minY + contentHeight / 2;
+
+                translateX = (canvasWidth / 2) - (contentCenterX * scale);
+                translateY = (canvasHeight / 2) - (contentCenterY * scale);
+            }
+            
             saveState();
             draw();
+        }
+		
+		function centerContentView() {
+            if (items.length === 0) {
+                resetView();
+                return;
+            }
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            items.forEach(item => {
+                minX = Math.min(minX, item.x);
+                minY = Math.min(minY, item.y);
+                maxX = Math.max(maxX, item.x + item.width);
+                maxY = Math.max(maxY, item.y + item.height);
+            });
+
+            const contentWidth = maxX - minX;
+            const contentHeight = maxY - minY;
+            
+            // If there's no real content, just reset the view.
+            if (contentWidth === 0 || contentHeight === 0) {
+                resetView();
+                return;
+            }
+
+            // Keep the loaded scale, but recalculate pan.
+            const contentCenterX = minX + contentWidth / 2;
+            const contentCenterY = minY + contentHeight / 2;
+
+            translateX = (canvas.clientWidth / 2) - (contentCenterX * scale);
+            translateY = (canvas.clientHeight / 2) - (contentCenterY * scale);
+
+            draw();
+            saveState(true); // Update history without creating a new undo state
         }
         
         function getCanvasCoordinates(event, isTouchEvent = false) {
@@ -2901,6 +2982,7 @@
                 const sessionData = await idbHelper.loadSession();
                 if (sessionData) {
                     await loadState(sessionData);
+					centerContentView();
                     history = [];
                     redoStack = [];
                     const currentLoadedStateForHistory = {
@@ -2982,7 +3064,8 @@
                     if (!boardData.items || (!boardData.transform && typeof boardData.scale === 'undefined')) {
                         throw new Error("Invalid JSON format for Stellary board."); 
                     } 
-                    await loadState(boardData); 
+                    await loadState(boardData);
+					centerContentView();
                     history = []; 
                     redoStack = []; 
                     const currentLoadedStateForHistory = { 
